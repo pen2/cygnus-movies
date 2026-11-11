@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="tile" x2="0" y2="1">
+      <stop stop-color="#ffffff"/><stop offset="1" stop-color="#f4f6f8"/>
+    </linearGradient>
+    <linearGradient id="film" x2=".2" y2="1">
+      <stop stop-color="#29445b"/><stop offset="1" stop-color="#112b40"/>
+    </linearGradient>
+    <linearGradient id="sky" x2="0" y2="1">
+      <stop stop-color="#eaf5fc"/><stop offset="1" stop-color="#a4c4dd"/>
+    </linearGradient>
+    <linearGradient id="lake" x1="0" y1="0" x2=".85" y2="1">
+      <stop stop-color="#b8d8ec"/><stop offset=".4" stop-color="#749fbe"/>
+      <stop offset="1" stop-color="#234e72"/>
+    </linearGradient>
+    <radialGradient id="reflection">
+      <stop stop-color="#f4fbff" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#d9edf9" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="frame"><rect x="33" y="51" width="94" height="51" rx="2.5"/></clipPath>
+  </defs>
+  <!-- White macOS tile, with a single dark film frame. -->
+  <rect x="8" y="9" width="144" height="144" rx="33" fill="#19374c" opacity=".12"/>
+  <rect x="8" y="7" width="144" height="144" rx="33" fill="url(#tile)"/>
+  <rect x="9" y="8" width="142" height="142" rx="32" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <g transform="rotate(-9 80 76)">
+    <rect x="23" y="37" width="114" height="79" rx="7" fill="#18354b" opacity=".13" transform="translate(0 2)"/>
+    <rect x="23" y="37" width="114" height="79" rx="7" fill="url(#film)"/>
+    <g fill="#f9fcff">
+      <path d="M33 42h10v5H33zm21 0h10v5H54zm21 0h10v5H75zm21 0h10v5H96zm21 0h10v5h-10z"/>
+      <path d="M33 106h10v5H33zm21 0h10v5H54zm21 0h10v5H75zm21 0h10v5H96zm21 0h10v5h-10z"/>
+    </g>
+    <!-- The landscape exists only inside the film's picture area. -->
+    <g clip-path="url(#frame)">
+      <rect x="33" y="51" width="94" height="51" fill="url(#sky)"/>
+      <path d="M30 76Q45 64 57 69T81 64T105 67L130 58V88H30Z" fill="#83a9c6" opacity=".65"/>
+      <path d="M30 81Q49 76 68 78T101 72L130 63V88H30Z" fill="#4d789a"/>
+      <path d="M30 83Q59 82 85 79T130 72V88H30Z" fill="#2c567a"/>
+      <rect x="33" y="83" width="94" height="19" fill="url(#lake)"/>
+      <ellipse cx="53" cy="85" rx="53" ry="2.2" fill="url(#reflection)"/>
+      <ellipse cx="51" cy="90" rx="43" ry="2.8" fill="url(#reflection)" opacity=".8"/>
+      <ellipse cx="62" cy="97" rx="51" ry="3" fill="url(#reflection)" opacity=".6"/>
+    </g>
+  </g>
+  <!-- Scissors remain distinct against the white tile. -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M99 94l20 26m15-31-26 33" stroke="#fff" stroke-width="11"/>
+    <circle cx="103" cy="130" r="8" stroke="#fff" stroke-width="11"/>
+    <circle cx="125" cy="128" r="8" stroke="#fff" stroke-width="11"/>
+    <path d="M99 94l20 26m15-31-26 33" stroke="#375b76" stroke-width="5"/>
+    <circle cx="103" cy="130" r="8" stroke="#375b76" stroke-width="5"/>
+    <circle cx="125" cy="128" r="8" stroke="#375b76" stroke-width="5"/>
+  </g>
+</svg>
