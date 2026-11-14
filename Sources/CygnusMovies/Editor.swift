@@ -95,6 +95,64 @@ final class Editor: ObservableObject {
     @Published var exporting = false
 
     let player = AVPlayer()
+    let temporaryMedia = TemporaryMediaStore()
+    @Published var copyingFrame = false
+
+    var canCaptureFrame: Bool { timeline.hasContent && previewError == nil && !loadingSources }
+    var overallExportProgress: Double {
+        let total = jobs.reduce(0.0) { $0 + Double(max(1, timelineFrames($1.timeline))) }
+        guard total > 0 else { return 0 }
+        return jobs.reduce(0.0) { value, job in
+            let progress: Double
+            if case .complete = job.status { progress = 1 }
+            else { progress = job.progress.isFinite ? min(1, max(0, job.progress)) : 0 }
+            return value + Double(max(1, timelineFrames(job.timeline))) * progress
+        } / total
+    }
+    var completedExportCount: Int { jobs.filter { if case .complete = $0.status { return true }; return false }.count }
+    var windowTitle: String {
+        exporting ? "cygnus movies — \(L10n.text("書き出し")) \(Int(overallExportProgress * 100))%" : "cygnus movies"
+    }
+
+    private func timelineFrames(_ timeline: Timeline) -> Int {
+        max(layout(timeline.clips).last?.end ?? 0, timeline.layers.map(\.end).max() ?? 0)
+    }
+
+    func pasteTemporaryMedia(from pasteboard: NSPasteboard = .general) {
+        guard !loadingSources else { return }
+        let previousImportURL = lastImportedURL
+        loadingSources = true
+        Task {
+            defer { loadingSources = false; lastImportedURL = previousImportURL }
+            do {
+                let urls = try await temporaryMedia.capture(pasteboard)
+                var errors: [String] = []
+                for url in urls {
+                    do {
+                        let source = try await registerSource(url, temporary: true)
+                        selectSource(source.id)
+                    } catch { errors.append(error.localizedDescription) }
+                }
+                if !errors.isEmpty { error = errors.joined(separator: "\n") }
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    func copyPreviewFrame() {
+        guard canCaptureFrame, !copyingFrame else { return }
+        let timeline = timeline, sources = project.sources, frame = previewFrame
+        copyingFrame = true
+        Task {
+            defer { copyingFrame = false }
+            do {
+                let image = try await renderedPreviewFrame(timeline, sources: sources, frame: frame)
+                let bitmap = NSBitmapImageRep(cgImage: image)
+                guard let png = bitmap.representation(using: .png, properties: [:]) else { throw MovieError(L10n.text("画像をコピーできませんでした。")) }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setData(png, forType: .png)
+            } catch { self.error = error.localizedDescription }
+        }
+    }
     private var observer: Any?
     private var previewEndObserver: AnyCancellable?
     private var exportTask: Task<Void, Never>?
@@ -700,6 +758,16 @@ final class Editor: ObservableObject {
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
+    func stepFrame(_ delta: Int) {
+        guard previewFrameCount > 0 else { return }
+        player.pause()
+        playing = false
+        previewFrame = min(max(0, previewFrame + delta), previewFrameCount - 1)
+        playhead = previewFrame * 30 / previewFPS
+        player.seek(to: CMTime(value: Int64(previewFrame), timescale: Int32(previewFPS)),
+                    toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
     func togglePlayback() {
         guard player.currentItem != nil else { return }
         if player.rate == 0 {
@@ -840,12 +908,13 @@ final class Editor: ObservableObject {
         }
     }
 
-    private func registerSource(_ url: URL) async throws -> Source {
+    private func registerSource(_ url: URL, temporary: Bool = false) async throws -> Source {
         let generation = projectGeneration
         let url = url.standardizedFileURL
         if let index = project.sources.firstIndex(where: { $0.path == url.path }) {
             edit {
                 project.sources[index].hiddenFromLibrary = nil
+                if temporary { project.sources[index].temporary = true }
                 if project.automaticOutput == nil, project.sources.first(where: { !$0.isImage })?.id == project.sources[index].id,
                    let info = project.sources[index].videoInfo {
                     applyOutputDefaults(info, sourceIndex: index)
@@ -856,7 +925,8 @@ final class Editor: ObservableObject {
             await initializeOutputDefaults()
             return existing
         }
-        let source = try await inspectSource(url)
+        var source = try await inspectSource(url)
+        source.temporary = temporary ? true : nil
         guard generation == projectGeneration else { throw CancellationError() }
         edit {
             project.sources.append(source)
@@ -954,6 +1024,15 @@ final class Editor: ObservableObject {
 
     @discardableResult
     func save(asNew: Bool = false) -> Bool {
+        guard !loadingSources else { return false }
+        if project.sources.contains(where: { $0.temporary == true }) {
+            let alert = NSAlert()
+            alert.messageText = L10n.text("一時素材は保存されません")
+            alert.informativeText = L10n.text("一時素材と、それを使うクリップ・画像レイヤーは保存対象から外れます。書き出した動画には含まれます。")
+            alert.addButton(withTitle: L10n.text("保存を続ける"))
+            alert.addButton(withTitle: L10n.text("キャンセル"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return false }
+        }
         var target = asNew ? nil : projectURL
         if target == nil {
             let panel = NSSavePanel()
@@ -971,7 +1050,7 @@ final class Editor: ObservableObject {
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(project).write(to: target, options: .atomic)
+            try encoder.encode(project.withoutTemporaryMedia).write(to: target, options: .atomic)
             projectURL = target
             saved = project
             return true
@@ -1046,7 +1125,7 @@ final class Editor: ObservableObject {
     }
 
     var initialExportDirectory: URL? {
-        let location = projectURL ?? lastImportedURL ?? project.sources.last?.url
+        let location = projectURL ?? lastImportedURL ?? project.sources.last(where: { $0.temporary != true })?.url
         guard let folder = location?.deletingLastPathComponent() else { return nil }
         var isDirectory: ObjCBool = false
         return FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory)

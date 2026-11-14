@@ -46,7 +46,7 @@ struct EditorView: View {
         let _ = language
 
         GeometryReader { geometry in
-            let base: CGFloat = showWaveform ? 230 : 190
+            let base: CGFloat = showWaveform ? 260 : 220
             let row = TimelineTrack.layerRowHeight
             let available = max(1, Int((geometry.size.height - 55 - 180 - base) / row))
             let inspectorWidth: CGFloat = 288
@@ -96,6 +96,7 @@ struct EditorView: View {
         }
         .coordinateSpace(name: TimelineScale.editorSpace)
         .background(EditorShortcuts(editor: editor).frame(width: 0, height: 0))
+        .background(WindowTitleBridge(title: editor.windowTitle).frame(width: 0, height: 0))
         .onChange(of: editor.selection) { selection in
             switch selection {
             case .clip, .layer: inspectorTab = .selection
@@ -215,6 +216,14 @@ struct EditorView: View {
             }
             .padding(13)
 
+            Button { editor.pasteTemporaryMedia() } label: {
+                Label(L10n.text("クリップボードから一時追加"), systemImage: "clipboard")
+            }
+            .font(.caption)
+            .disabled(editor.loadingSources)
+            .help(L10n.text("画像・動画を一時素材として追加（終了時に破棄・保存対象外）"))
+            .padding(.horizontal, 11).padding(.bottom, 8)
+
             if editor.librarySources.isEmpty {
                 Spacer()
                 VStack(spacing: 8) {
@@ -260,6 +269,13 @@ struct EditorView: View {
                 Text(source.name).font(.callout).lineLimit(1).truncationMode(.middle)
                 Text(missing ? L10n.text("見つかりません") : source.isImage ? L10n.text("画像") : timecode(source.frames))
                     .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                if source.temporary == true {
+                    Text(L10n.text("一時素材・保存対象外"))
+                        .font(.caption2).foregroundStyle(.orange)
+                        .padding(.horizontal, 4).padding(.vertical, 2)
+                        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 3))
+                        .help(L10n.text("アプリを終了すると破棄されます"))
+                }
             }
             Spacer(minLength: 0)
             Button { editor.addClip(source) } label: { Image(systemName: "plus.circle") }
@@ -337,27 +353,45 @@ struct EditorView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(.horizontal, 13)
-            HStack(spacing: 12) {
-                Button { editor.seek(0) } label: { Image(systemName: "backward.end.fill") }.help(L10n.text("先頭へ"))
-                Button(action: editor.togglePlayback) {
-                    Image(systemName: editor.playing ? "pause.fill" : "play.fill").frame(width: 19)
+            VStack(spacing: 3) {
+                HStack(spacing: 6) {
+                    playbackControl("backward.end.fill", help: "先頭へ") { editor.seek(0) }
+                    playbackControl("backward.frame.fill", help: "前のフレーム（←）") { editor.stepFrame(-1) }
+                    playbackControl(editor.playing ? "pause.fill" : "play.fill", help: "再生 / 一時停止（Space）", action: editor.togglePlayback)
+                    playbackControl("forward.frame.fill", help: "次のフレーム（→）") { editor.stepFrame(1) }
+                    playbackControl("forward.end.fill", help: "末尾へ") { editor.seek(editor.totalFrames) }
                 }
-                .keyboardShortcut(.space, modifiers: [])
-                .help(L10n.text("再生 / 一時停止"))
-                Button { editor.seek(editor.totalFrames) } label: { Image(systemName: "forward.end.fill") }.help(L10n.text("末尾へ"))
-                Text(timecode(editor.previewFrame, fps: editor.previewFPS))
-                    .font(.system(.callout, design: .monospaced)).foregroundStyle(accent)
-                Text("/ " + timecode(editor.previewFrameCount, fps: editor.previewFPS))
-                    .font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
-                let frameNumber = editor.previewFrameCount == 0 ? 0 : editor.previewFrame + 1
-                Text(L10n.format("フレーム %@ / %@", String(describing: frameNumber), String(describing: editor.previewFrameCount)))
-                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                HStack(spacing: 7) {
+                    Text(timecode(editor.previewFrame, fps: editor.previewFPS))
+                        .font(.system(.callout, design: .monospaced)).foregroundStyle(accent)
+                    Text("/ " + timecode(editor.previewFrameCount, fps: editor.previewFPS))
+                        .font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                    let frameNumber = editor.previewFrameCount == 0 ? 0 : editor.previewFrame + 1
+                    Text(L10n.format("フレーム %@ / %@", String(describing: frameNumber), String(describing: editor.previewFrameCount)))
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Button(action: editor.copyPreviewFrame) {
+                        Image(systemName: "doc.on.doc").frame(width: 28, height: 28)
+                    }
+                    .help(L10n.text("画像をコピー"))
+                    .disabled(editor.copyingFrame)
+                    FrameShareButton(editor: editor).frame(width: 30, height: 28).editorHoverBrightness()
+                }
+                .padding(.horizontal, 6)
             }
             .buttonStyle(HoverColorButtonStyle(color: accent, hoverColor: brightAccent))
             .disabled(!editor.timeline.hasContent || editor.previewError != nil)
-            .frame(height: 44)
+            .frame(height: 82)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func playbackControl(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 16)).frame(width: 36, height: 32)
+        }
+        .help(L10n.text(help))
+        .accessibilityLabel(L10n.text(help))
     }
 
     private func inspector(width: CGFloat) -> some View {
@@ -762,6 +796,17 @@ struct EditorView: View {
     private var exportSheet: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(L10n.text("書き出し")).font(.title2.weight(.semibold))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(L10n.text("全体の進捗")).fontWeight(.semibold)
+                    Spacer()
+                    Text(editor.overallExportProgress.formatted(.percent.precision(.fractionLength(0))))
+                        .monospacedDigit()
+                }
+                ProgressView(value: editor.overallExportProgress).labelsHidden()
+                Text(L10n.format("完了 %@ / %@ 本", String(editor.completedExportCount), String(editor.jobs.count)))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(editor.jobs) { job in

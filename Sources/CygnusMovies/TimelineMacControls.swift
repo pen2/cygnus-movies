@@ -16,6 +16,13 @@ struct TimelineWheel: NSViewRepresentable {
             monitor = nil
             guard window != nil else { return }
 
+            if let scroll = enclosingScrollView {
+                scroll.hasHorizontalScroller = true
+                scroll.autohidesScrollers = false
+                scroll.scrollerStyle = .legacy
+                scroll.horizontalScroller?.controlSize = .regular
+            }
+
             monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
                 guard let self, let window = self.window, event.window === window,
                       !event.modifierFlags.contains(.option),

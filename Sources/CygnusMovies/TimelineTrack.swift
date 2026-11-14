@@ -57,6 +57,7 @@ struct TimelineTrack: View {
                     if showWaveform {
                         waveformLane(width, durationWidth: durationWidth)
                     }
+                    Color.clear.frame(height: 18)
                 }
                 .background(alignment: .topLeading) { TimelineWheel().frame(width: 0, height: 0) }
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(TimelineScale.editorSpace)) } action: {

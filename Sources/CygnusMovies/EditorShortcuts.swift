@@ -32,9 +32,25 @@ struct EditorShortcuts: NSViewRepresentable {
                     if !event.isARepeat { editor.performHistoryCommand(redo: modifiers.contains(.shift)) }
                     return nil
                 }
+                // Plain arrow/Space menu equivalents must not steal text editing.
+                if modifiers.isEmpty, key == " " || event.keyCode == 123 || event.keyCode == 124,
+                   let responder = window.firstResponder,
+                   responder is NSTextView || responder is NSTextField {
+                    responder.keyDown(with: event)
+                    return nil
+                }
                 guard modifiers.isEmpty,
                       !(window.firstResponder is NSTextView), !(window.firstResponder is NSTextField)
                 else { return event }
+                if key == " " || event.keyCode == 123 || event.keyCode == 124 {
+                    guard editor.canCaptureFrame else { return event }
+                    if key == " " {
+                        if !event.isARepeat { editor.togglePlayback() }
+                    } else {
+                        editor.stepFrame(event.keyCode == 123 ? -1 : 1)
+                    }
+                    return nil
+                }
                 if event.keyCode == 51 || event.keyCode == 117 {
                     guard editor.selection != nil else { return event }
                     if !event.isARepeat { editor.deleteSelection() }

@@ -291,3 +291,50 @@
 "すべてのタイムラインで音声波形を表示" = "Show audio waveforms on all timelines";
 "タイムライン共通の設定と新規移動" = "Shared timeline settings and new destinations";
 "吸着・音声波形・ズームはアプリ全体で共通です。タイムラインやプロジェクトを切り替えても同じ状態が保たれ、再起動後も保存されます。クリップやレイヤーの右クリックでは、新しいタイムラインを作成して移動・複製できます。Shiftで選択した複数項目にも対応し、作成と移動・複製は一度の取り消しで戻せます。" = "Snapping, waveform display, and zoom are shared throughout the app and persist across timeline changes, project changes, and app restarts. Right-click clips or layers to move or copy them to a new timeline. Shift-selected items are included, and a single Undo restores both timeline creation and the transfer.";
+
+"クリップボードから一時追加" = "Add Temporary Clipboard Media";
+
+"クリップボードから一時的に素材を追加" = "Add Temporary Media from Clipboard";
+
+"画像・動画を一時素材として追加（終了時に破棄・保存対象外）" = "Add clipboard images or movies temporarily (discarded on quit; not saved)";
+
+"クリップボードに対応する画像・動画がありません。" = "The clipboard does not contain a supported image or movie.";
+
+"クリップボード画像" = "Clipboard Image";
+
+"クリップボード動画" = "Clipboard Movie";
+
+"一時素材・保存対象外" = "Temporary · Not Saved";
+
+"アプリを終了すると破棄されます" = "Discarded when the app quits";
+
+"一時素材は保存されません" = "Temporary media will not be saved";
+
+"一時素材と、それを使うクリップ・画像レイヤーは保存対象から外れます。書き出した動画には含まれます。" = "Temporary media and its clips and image layers are excluded from the saved project. They are included in exported movies.";
+
+"保存を続ける" = "Continue Saving";
+
+"画像をコピー" = "Copy Image";
+
+"画像を共有" = "Share Image";
+
+"画像をコピーできませんでした。" = "Could not copy the image.";
+
+"前のフレーム（←）" = "Previous Frame (←)";
+
+"次のフレーム（→）" = "Next Frame (→)";
+
+"再生 / 一時停止（Space）" = "Play / Pause (Space)";
+
+"再生" = "Playback";
+
+"前のフレーム" = "Previous Frame";
+
+"次のフレーム" = "Next Frame";
+
+"全体の進捗" = "Overall Progress";
+
+"完了 %@ / %@ 本" = "Completed %@ / %@";
+
+"プレビューと一時素材" = "Preview and temporary media";
+"Spaceで再生・停止、左右キーで1コマずつ移動します。フレーム表示の右のボタンで、テキストや効果を含めた画像をコピー・共有できます。「クリップボードから一時追加」は画像・動画をこの起動中だけ素材として扱います。一時素材と使用クリップ・画像レイヤーはプロジェクトには保存されず、終了時に破棄されます。動画の書き出しには含まれます。複数書き出しの全体進捗は、書き出し状況とタイトルバーに表示されます。" = "Use Space to play or pause and the arrow keys to step one frame. Buttons beside the frame counter copy or share the frame, including text and effects. Temporary clipboard media is available only during this app session. It and its clips and image layers are excluded from saved projects and discarded on quit, but are included in exported movies. Batch export progress appears in the export status window and the title bar.";

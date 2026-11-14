@@ -120,11 +120,16 @@ struct Source: Identifiable, Codable, Equatable {
     var frames: Int
     var hiddenFromLibrary: Bool?
     var stillImage: Bool?
+    var temporary: Bool?
     var videoInfo: SourceVideoInfo?
     var isImage: Bool { stillImage == true }
     static let maxImageFrames = 30 * 60 * 60
     var url: URL { URL(fileURLWithPath: path) }
-    var name: String { url.lastPathComponent }
+    var name: String {
+        guard temporary == true else { return url.lastPathComponent }
+        let title = isImage ? L10n.text("クリップボード画像") : L10n.text("クリップボード動画")
+        return "\(title) \(id.uuidString.prefix(4))"
+    }
 }
 
 struct SourceVideoInfo: Codable, Equatable {

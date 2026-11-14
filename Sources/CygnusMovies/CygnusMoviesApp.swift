@@ -34,6 +34,9 @@ struct CygnusMoviesApp: App {
                     .keyboardShortcut("o")
                 Button(L10n.text("素材を読み込む…"), action: editor.chooseSources)
                     .keyboardShortcut("i")
+                Button(L10n.text("クリップボードから一時的に素材を追加")) { editor.pasteTemporaryMedia() }
+                    .keyboardShortcut("v", modifiers: [.command, .shift])
+                    .disabled(editor.loadingSources)
                 Divider()
                 Button(L10n.text("プロジェクトファイルを関連付け…"), action: editor.associateProjectFiles)
             }
@@ -48,6 +51,20 @@ struct CygnusMoviesApp: App {
                 Button(L10n.text("レイヤーを複製"), action: editor.duplicateLayer)
                     .keyboardShortcut("d")
                     .disabled(editor.selectedLayer == nil)
+            }
+            CommandMenu(L10n.text("再生")) {
+                Button(L10n.text("再生 / 一時停止"), action: editor.togglePlayback)
+                    .keyboardShortcut(.space, modifiers: [])
+                    .disabled(!editor.canCaptureFrame)
+                Button(L10n.text("前のフレーム")) { editor.stepFrame(-1) }
+                    .keyboardShortcut(.leftArrow, modifiers: [])
+                    .disabled(!editor.canCaptureFrame)
+                Button(L10n.text("次のフレーム")) { editor.stepFrame(1) }
+                    .keyboardShortcut(.rightArrow, modifiers: [])
+                    .disabled(!editor.canCaptureFrame)
+                Divider()
+                Button(L10n.text("画像をコピー"), action: editor.copyPreviewFrame)
+                    .disabled(!editor.canCaptureFrame || editor.copyingFrame)
             }
             CommandGroup(replacing: .help) {
                 Button(L10n.text("cygnus movies ヘルプ"), action: delegate.showHelp)

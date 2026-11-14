@@ -11,6 +11,6 @@ cp Resources/AppIcon-preview.png "$folder/image.png"
 arch=$(/usr/bin/uname -m)
 xcrun swiftc -swift-version 5 -parse-as-library -O -target "$arch-apple-macosx13.0" \
     -module-cache-path .build/clang-cache \
-    Sources/CygnusMovies/{Project,Editor,Export,Media,VisualLayer,LayerRendering,Compositor,Localization,TimelineInteraction,AppDelegate,MovieHelpView}.swift \
+    Sources/CygnusMovies/{Project,Editor,Export,Media,VisualLayer,LayerRendering,Compositor,Localization,TimelineInteraction,TemporaryMedia,PreviewActions,AppDelegate,MovieHelpView}.swift \
     Tests/OpenFilesCheck.swift -o "$folder/check"
 "$folder/check" "$folder"
