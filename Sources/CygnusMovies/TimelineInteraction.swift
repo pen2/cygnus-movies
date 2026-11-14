@@ -3,6 +3,14 @@ import Foundation
 
 import UniformTypeIdentifiers
 
+// View preferences belong to the app, rather than to an editable project.
+enum TimelinePreferences {
+    static let snapping = "timelineSnapping"
+    static let waveform = "timelineShowWaveform"
+    static let zoom = "timelineZoom"
+    static let fittedFrames = "timelineFittedFrames"
+}
+
 struct TimelineDragAvatar {
     let location: CGPoint
     let title: String

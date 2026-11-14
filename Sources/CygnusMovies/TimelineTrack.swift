@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct TimelineTrack: View {
     @AppStorage(AppLanguage.preferenceKey) private var language = AppLanguage.system
+    @AppStorage(TimelinePreferences.waveform) private var showWaveform = false
 
     @ObservedObject var editor: Editor
     let zoom: Double
@@ -36,7 +37,6 @@ struct TimelineTrack: View {
     var body: some View {
         let _ = language
 
-        let showWaveform = editor.timeline.showWaveform == true
         let request = showWaveform && !editor.timeline.clips.isEmpty
             ? WaveformRequest(timelineID: editor.timeline.id, clips: editor.timeline.clips, sources: editor.project.sources,
                               frames: editor.totalFrames)
@@ -748,6 +748,12 @@ private struct TimelineTransferMenus: View {
         if !destinations.isEmpty {
             menu(L10n.text("他のタイムラインへ移動"), destinations: destinations, copy: false)
             menu(L10n.text("他のタイムラインへ複製"), destinations: destinations, copy: true)
+        }
+        Button(L10n.text("新しいタイムラインを作成して移動")) {
+            editor.placeItemsInNewTimeline(editor.itemsForTransfer(item), copy: false)
+        }
+        Button(L10n.text("新しいタイムラインを作成して複製")) {
+            editor.placeItemsInNewTimeline(editor.itemsForTransfer(item), copy: true)
         }
     }
 

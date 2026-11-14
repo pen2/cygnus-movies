@@ -324,6 +324,27 @@ final class Editor: ObservableObject {
     }
 
     @discardableResult
+    func placeItemsInNewTimeline(_ transfer: ItemTransfer, copy: Bool) -> Bool {
+        guard let origin = project.timelines.first(where: { $0.id == transfer.origin }) else { return false }
+        let items = Set(transfer.items)
+        let count = origin.clips.filter { items.contains(.clip($0.id)) }.count
+            + origin.layers.filter { items.contains(.layer($0.id)) }.count
+        guard !items.isEmpty, count == items.count else { return false }
+        // Creation and transfer form one undoable operation. Capture the transfer
+        // before selecting the new timeline, including any Shift-selected items.
+        var placed = false
+        edit {
+            addTimeline()
+            updateTimeline {
+                $0.output = origin.output
+                $0.outputOrigin = origin.outputOrigin
+            }
+            placed = placeItems(transfer, in: timeline.id, copy: copy)
+        }
+        return placed
+    }
+
+    @discardableResult
     func placeItems(_ transfer: ItemTransfer, in destination: UUID,
                     insertion: Int? = nil, frame: Int? = nil, copy: Bool = false) -> Bool {
         guard let originIndex = project.timelines.firstIndex(where: { $0.id == transfer.origin }),

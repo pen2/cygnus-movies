@@ -13,9 +13,10 @@ struct EditorView: View {
     @ObservedObject var editor: Editor
     @State private var removeTimeline = false
     @State private var timelineRemovalTarget: Timeline?
-    @State private var zoom = 0.56
-    @State private var fitTimeline = false
-    @AppStorage("timelineSnapping") private var snapping = true
+    @AppStorage(TimelinePreferences.zoom) private var zoom = 0.56
+    @AppStorage(TimelinePreferences.fittedFrames) private var fittedScaleFrames = 0
+    @AppStorage(TimelinePreferences.snapping) private var snapping = true
+    @AppStorage(TimelinePreferences.waveform) private var showWaveform = false
     @State private var renamingProject = false
     @State private var projectNameDraft = ""
     @State private var renamingTimeline = false
@@ -45,7 +46,7 @@ struct EditorView: View {
         let _ = language
 
         GeometryReader { geometry in
-            let base: CGFloat = editor.timeline.showWaveform == true ? 230 : 190
+            let base: CGFloat = showWaveform ? 230 : 190
             let row = TimelineTrack.layerRowHeight
             let available = max(1, Int((geometry.size.height - 55 - 180 - base) / row))
             let inspectorWidth: CGFloat = 288
@@ -633,23 +634,22 @@ struct EditorView: View {
                 Toggle(L10n.text("吸着"), isOn: $snapping)
                     .toggleStyle(.switch).controlSize(.small).editorHoverBrightness()
                     .help(L10n.text("ドラッグ中にクリップや隣のレイヤーの端に吸着"))
-                Toggle(L10n.text("音声波形"), isOn: Binding(get: { editor.timeline.showWaveform == true },
-                                               set: { show in editor.updateTimeline { $0.showWaveform = show ? true : nil } }))
+                Toggle(L10n.text("音声波形"), isOn: $showWaveform)
                     .toggleStyle(.switch).controlSize(.small).editorHoverBrightness()
-                    .help(L10n.text("このタイムラインの音声波形を表示"))
+                    .help(L10n.text("すべてのタイムラインで音声波形を表示"))
                 HStack(spacing: 10) {
                     Text(L10n.text("ズーム")).font(.caption).foregroundStyle(.secondary)
                     Slider(value: Binding(get: {
-                        fitTimeline ? TimelineScale(width: viewportWidth).zoomToFit(frames: fittedFrames) : zoom
+                        fittedScaleFrames > 0 ? TimelineScale(width: viewportWidth).zoomToFit(frames: fittedScaleFrames) : zoom
                     }, set: { value in
-                        fitTimeline = false
+                        fittedScaleFrames = 0
                         zoom = value
                     }), in: 0...1)
                         .frame(width: 105)
                         .accessibilityLabel(L10n.text("タイムラインのズーム"))
                 }
                 .editorHoverBrightness()
-                Button { fitTimeline = true } label: {
+                Button { fittedScaleFrames = fittedFrames } label: {
                     Image(systemName: "arrow.left.and.right.square")
                 }
                 .help(L10n.text("全尺を表示幅に合わせる"))
@@ -657,7 +657,7 @@ struct EditorView: View {
                 .disabled(fittedFrames == 0)
             }
             .padding(.horizontal, 13).frame(height: 38)
-            TimelineTrack(editor: editor, zoom: zoom, fittedFrames: fitTimeline ? fittedFrames : nil,
+            TimelineTrack(editor: editor, zoom: zoom, fittedFrames: fittedScaleFrames > 0 ? fittedScaleFrames : nil,
                           snapping: snapping, layerHeight: layerHeight,
                           tabFrames: timelineTabFrames.mapValues { $0.intersection(timelineTabViewport) },
                           tabDropTarget: $timelineDropTarget, dragAvatar: $dragAvatar)

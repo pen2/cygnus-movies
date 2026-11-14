@@ -218,7 +218,7 @@ struct Timeline: Identifiable, Codable, Equatable {
     var clips: [Clip] = []
     var output = OutputSettings()
     var outputOrigin: OutputOrigin? = .awaitingSource
-    var showWaveform: Bool?
+    var showWaveform: Bool? // Legacy project field; waveform display is now an app preference.
     // Stored bottom to top so each layer affects the layers below it.
     var visualLayers: [VisualLayer]?
     var layers: [VisualLayer] {

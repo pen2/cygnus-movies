@@ -285,3 +285,9 @@
 "自動設定・色補正・再生速度" = "Automatic Settings, Color, and Speed";
 "最初に読み込んだ動画から、解像度・画面比率・fpsに最も近い設定を選びます。この3項目を手動変更すると自動選択の表示が消えます。クリップ設定では、明るさ・色温度・色かぶり・ガンマ・彩度・色相を調整できます。再生速度は10〜800％の数値で指定でき、音声の高さを保持します。" = "Resolution, aspect ratio, and frame rate are selected from the first imported video. Changing any of these manually removes the automatic selection notice. In clip settings, adjust brightness, temperature, tint, gamma, saturation, and hue. Enter a playback speed from 10–800%. Audio pitch is preserved.";
 "「設定…」でハードウェアエンコードをオン・オフできます。オンの場合は対応するハードウェアを優先し、利用できなければソフトウェアに切り替えます。「書き出し状況」で使用した方式を確認できます。" = "Turn hardware encoding on or off in Settings. When enabled, supported hardware is preferred, with software fallback when unavailable. See the encoder used in Export Progress.";
+
+"新しいタイムラインを作成して移動" = "Move to a New Timeline";
+"新しいタイムラインを作成して複製" = "Copy to a New Timeline";
+"すべてのタイムラインで音声波形を表示" = "Show audio waveforms on all timelines";
+"タイムライン共通の設定と新規移動" = "Shared timeline settings and new destinations";
+"吸着・音声波形・ズームはアプリ全体で共通です。タイムラインやプロジェクトを切り替えても同じ状態が保たれ、再起動後も保存されます。クリップやレイヤーの右クリックでは、新しいタイムラインを作成して移動・複製できます。Shiftで選択した複数項目にも対応し、作成と移動・複製は一度の取り消しで戻せます。" = "Snapping, waveform display, and zoom are shared throughout the app and persist across timeline changes, project changes, and app restarts. Right-click clips or layers to move or copy them to a new timeline. Shift-selected items are included, and a single Undo restores both timeline creation and the transfer.";
