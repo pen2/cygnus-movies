@@ -69,7 +69,12 @@ trap cleanup EXIT
 submission_result=0
 xcrun notarytool submit "$staging/submission.zip" \
     --keychain-profile "$NOTARY_PROFILE" --wait --output-format json \
-    > "$logdir/submission.json" || submission_result=$?
+    > "$logdir/submission.json" 2> "$logdir/submission-error.txt" || submission_result=$?
+if [[ ! -s "$logdir/submission.json" ]]; then
+    cat "$logdir/submission-error.txt" >&2
+    print -u2 "Notarization submission failed before a submission ID was issued. See $logdir"
+    exit 1
+fi
 submission_id=$(/usr/bin/plutil -extract id raw -o - "$logdir/submission.json")
 xcrun notarytool log "$submission_id" --keychain-profile "$NOTARY_PROFILE" "$logdir/log.json"
 notary_status=$(/usr/bin/plutil -extract status raw -o - "$logdir/submission.json")
