@@ -13,7 +13,7 @@ enum CanvasFill: String, Codable, CaseIterable {
 }
 
 enum LayerKind: String, Codable, CaseIterable {
-    case blur, mosaic, text, rectangle, image
+    case blur, mosaic, text, rectangle, image, video
 
     var title: String {
         switch self {
@@ -22,6 +22,7 @@ enum LayerKind: String, Codable, CaseIterable {
         case .text: L10n.text("テキスト")
         case .rectangle: L10n.text("矩形")
         case .image: L10n.text("画像")
+        case .video: L10n.text("動画")
         }
     }
 
@@ -32,6 +33,7 @@ enum LayerKind: String, Codable, CaseIterable {
         case .text: "textformat"
         case .rectangle: "rectangle.fill"
         case .image: "photo"
+        case .video: "film"
         }
     }
 }
@@ -107,6 +109,9 @@ struct VisualLayer: Identifiable, Codable, Equatable {
     var textAlignment: LayerTextAlignment?
     var shadow = false
     var sourceID: UUID?
+    var videoSourceStart: Int?
+    var videoVolume: Double?
+    var videoMuted: Bool?
     var fontFamily: String?
     var regularWeight: Bool?
     var entrance: Transition?
@@ -139,5 +144,7 @@ struct VisualLayer: Identifiable, Codable, Equatable {
             && (rectangleColor?.isValid ?? true) && (rectangleOpacity.map { (0...1).contains($0) } ?? true)
             && (animationSpan.map { (-30_000_000...0).contains($0.offset) && (1...30_000_000).contains($0.length) } ?? true)
             && text.count <= 500 && (fontFamily?.count ?? 0) <= 150
+            && (videoSourceStart.map { $0 >= 0 && $0 <= Self.maximumEnd } ?? true)
+            && (videoVolume.map { (0...1).contains($0) } ?? true)
     }
 }

@@ -253,11 +253,14 @@ struct Project: Codable, Equatable {
 
         let lengths = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.frames) })
         let images = Set(sources.filter(\.isImage).map(\.id))
+        let movies = Set(sources.filter { !$0.isImage }.map(\.id))
         for timeline in timelines {
             guard Set(timeline.clips.map(\.id)).count == timeline.clips.count,
                   Set(timeline.layers.map(\.id)).count == timeline.layers.count,
                   timeline.layers.allSatisfy({ layer in
                       layer.isValid && (layer.kind != .image || layer.sourceID.map(images.contains) == true)
+                          && (layer.kind != .video || layer.sourceID.map { movies.contains($0) &&
+                              (layer.videoSourceStart ?? 0) + layer.end - layer.start <= (lengths[$0] ?? 0) } == true)
                   }),
                   timeline.clips.allSatisfy({
                       guard let length = lengths[$0.sourceID] else { return false }

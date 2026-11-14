@@ -8,9 +8,14 @@ struct RenderedVisualLayer {
     let layer: VisualLayer
     let range: CMTimeRange
     private let artwork: CIImage?
+    let videoTrackID: CMPersistentTrackID?
+    let videoTransform: CGAffineTransform
 
-    init(_ layer: VisualLayer, canvas: CGSize, image: CGImage? = nil) {
+    init(_ layer: VisualLayer, canvas: CGSize, image: CGImage? = nil,
+         videoTrackID: CMPersistentTrackID? = nil, videoTransform: CGAffineTransform = .identity) {
         self.layer = layer
+        self.videoTrackID = videoTrackID
+        self.videoTransform = videoTransform
         range = CMTimeRange(start: frameTime(layer.start), duration: frameTime(layer.end - layer.start))
         if layer.kind == .text {
             artwork = Self.makeText(layer, canvas: canvas)
@@ -19,7 +24,8 @@ struct RenderedVisualLayer {
         }
     }
 
-    func applying(to image: CIImage, bounds: CGRect, at time: CMTime, region override: CanvasRegion? = nil) -> CIImage {
+    func applying(to image: CIImage, bounds: CGRect, at time: CMTime, region override: CanvasRegion? = nil,
+                  videoFrame: CIImage? = nil) -> CIImage {
         let region = (override ?? layer.region).pixels(in: bounds.size)
         let rect = CGRect(x: region.minX, y: bounds.height - region.maxY, width: region.width, height: region.height)
             .integral.intersection(bounds)
@@ -38,6 +44,13 @@ struct RenderedVisualLayer {
         case .image:
             guard let artwork else { return image }
             result = artwork.positioned(in: rect)
+        case .video:
+            guard let videoFrame else { return image }
+            let flip = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: videoFrame.extent.height)
+            let oriented = videoFrame.transformed(by: flip.concatenating(videoTransform))
+            let upright = oriented.transformed(by: CGAffineTransform(a: 1, b: 0, c: 0, d: -1,
+                                                                     tx: 0, ty: oriented.extent.minY + oriented.extent.maxY))
+            result = upright.positioned(in: rect)
         case .rectangle:
             let color = layer.rectangleColor ?? .rectangleDefault
             let fill = CGColor(srgbRed: color.red, green: color.green, blue: color.blue,

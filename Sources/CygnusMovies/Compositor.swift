@@ -34,6 +34,7 @@ final class PictureInstruction: NSObject, AVVideoCompositionInstructionProtocol,
     }
 
     let timeRange: CMTimeRange
+    let animationRange: CMTimeRange
     let primary: Layer
     let previous: Layer?
     let transition: Transition
@@ -45,9 +46,10 @@ final class PictureInstruction: NSObject, AVVideoCompositionInstructionProtocol,
     init(
         range: CMTimeRange, primary: Layer, previous: Layer? = nil, transition: Transition = .cut,
         fadeIn: CMTime = .zero, fadeOut: CMTime = .zero, effects: [RenderedVisualLayer] = [],
-        layerPreview: LayerPreviewGeometry? = nil
+        layerPreview: LayerPreviewGeometry? = nil, animationRange: CMTimeRange? = nil
     ) {
         timeRange = range
+        self.animationRange = animationRange ?? range
         self.primary = primary
         self.previous = previous
         self.transition = transition
@@ -62,7 +64,8 @@ final class PictureInstruction: NSObject, AVVideoCompositionInstructionProtocol,
     var containsTweening: Bool { true }
     var passthroughTrackID: CMPersistentTrackID { kCMPersistentTrackID_Invalid }
     var requiredSourceTrackIDs: [NSValue]? {
-        [primary.trackID, previous?.trackID].compactMap { $0 }.map { NSNumber(value: $0) }
+        let overlays = effects.filter { $0.range.intersection(timeRange).duration > .zero }.compactMap(\.videoTrackID)
+        return ([primary.trackID, previous?.trackID].compactMap { $0 } + overlays).map { NSNumber(value: $0) }
     }
 }
 
@@ -119,8 +122,8 @@ class MovieCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
                     .composited(over: background).cropped(to: bounds)
             }
 
-            let elapsed = (request.compositionTime - instruction.timeRange.start).seconds
-            let duration = instruction.timeRange.duration.seconds
+            let elapsed = (request.compositionTime - instruction.animationRange.start).seconds
+            let duration = instruction.animationRange.duration.seconds
             let incoming = fitted(instruction.primary)
             let result: CIImage
             if let previous = instruction.previous, let outgoing = fitted(previous), let incoming {
@@ -148,7 +151,8 @@ class MovieCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
             let preview = instruction.layerPreview?.current()
             for effect in instruction.effects where effect.range.containsTime(request.compositionTime) {
                 let region = preview?.id == effect.layer.id ? preview?.region : nil
-                composite = effect.applying(to: composite, bounds: bounds, at: request.compositionTime, region: region)
+                let frame = effect.videoTrackID.flatMap { request.sourceFrame(byTrackID: $0) }.map { CIImage(cvPixelBuffer: $0) }
+                composite = effect.applying(to: composite, bounds: bounds, at: request.compositionTime, region: region, videoFrame: frame)
             }
             context.render(composite, to: target, bounds: bounds, colorSpace: colorSpace)
             request.finish(withComposedVideoFrame: target)

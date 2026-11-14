@@ -131,7 +131,7 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
         audioTracks.append(sound)
     }
 
-    let audioParameters = audioTracks.map {
+    var audioParameters = audioTracks.map {
         let parameters = AVMutableAudioMixInputParameters(track: $0)
         parameters.audioTimePitchAlgorithm = .spectral
         return parameters
@@ -175,9 +175,85 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
         }
     }
 
-    if includeVisualLayers {
-        for layer in timeline.layers {
-            try Task.checkCancellation()
+    for layer in timeline.layers {
+        try Task.checkCancellation()
+        if layer.kind == .video {
+            guard let id = layer.sourceID, let reference = references[id], !reference.isImage else {
+                throw MovieError(L10n.text("動画レイヤーに素材が設定されていません。"))
+            }
+            let movie: MediaSource
+            if let cached = mediaByID[id] { movie = cached }
+            else { movie = try await MediaSource(url: reference.url); mediaByID[id] = movie }
+            let offset = layer.videoSourceStart ?? 0
+            let length = layer.end - layer.start
+            guard offset + length <= movie.frameCount else {
+                throw MovieError(L10n.text("動画レイヤーの使用区間が素材の長さを超えています。"))
+            }
+            let range = CMTimeRange(start: movie.videoRange.start + frameTime(offset), duration: frameTime(length))
+            if includeVisualLayers {
+                guard let track = asset.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+                    throw MovieError(L10n.text("編集用トラックを作成できません。"))
+                }
+                try track.insertTimeRange(range, of: movie.video, at: frameTime(layer.start))
+                effects.append(RenderedVisualLayer(layer, canvas: video.renderSize, videoTrackID: track.trackID,
+                                                   videoTransform: movie.orientation))
+            }
+            if let sound = movie.audio, let soundRange = movie.audioRange {
+                let available = range.intersection(soundRange)
+                if available.duration > .zero {
+                    let prepared = try await AudioPreparationCache.shared.prepare(asset: movie.asset, track: sound, range: soundRange)
+                    let mapped = prepared.mappedRange(available)
+                    let readable = mapped.intersection(prepared.range)
+                    if readable.duration > .zero {
+                        guard let track = asset.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+                            throw MovieError(L10n.text("編集用トラックを作成できません。"))
+                        }
+                        let start = frameTime(layer.start) + available.start - range.start + readable.start - mapped.start
+                        try track.insertTimeRange(readable, of: prepared.track, at: start)
+                        let parameters = AVMutableAudioMixInputParameters(track: track)
+                        let gain = layer.videoMuted == true ? 0 : Float(layer.videoVolume ?? 1)
+                        let spanStart = frameTime(layer.animationStart)
+                        let spanEnd = spanStart + frameTime(layer.animationLength)
+                        let fade = frameTime(min(9, layer.animationLength / 2))
+                        let visible = frameRange(layer.start, length)
+                        // Initialize gain through the leading empty segment too. All ramps
+                        // must be disjoint, including the animation retained after a split.
+                        var initial = gain
+                        if (layer.entrance ?? .cut) != .cut, fade > .zero {
+                            initial *= Float(min(1, max(0, (visible.start - spanStart).seconds / fade.seconds)))
+                        }
+                        if (layer.exit ?? .cut) != .cut, fade > .zero {
+                            initial *= Float(min(1, max(0, (spanEnd - visible.start).seconds / fade.seconds)))
+                        }
+                        if visible.start > .zero {
+                            parameters.setVolumeRamp(fromStartVolume: initial, toEndVolume: initial,
+                                                     timeRange: CMTimeRange(start: .zero, end: visible.start))
+                        }
+                        let steadyStart = (layer.entrance ?? .cut) == .cut ? spanStart : spanStart + fade
+                        let steadyEnd = (layer.exit ?? .cut) == .cut ? spanEnd : spanEnd - fade
+                        let steady = CMTimeRange(start: steadyStart, end: steadyEnd).intersection(visible)
+                        if steady.duration > .zero {
+                            parameters.setVolumeRamp(fromStartVolume: gain, toEndVolume: gain, timeRange: steady)
+                        }
+                        if (layer.entrance ?? .cut) != .cut, fade > .zero {
+                            let ramp = CMTimeRange(start: spanStart, duration: fade).intersection(visible)
+                            if ramp.duration > .zero {
+                                parameters.setVolumeRamp(fromStartVolume: gain * Float((ramp.start - spanStart).seconds / fade.seconds),
+                                                         toEndVolume: gain * Float((ramp.end - spanStart).seconds / fade.seconds), timeRange: ramp)
+                            }
+                        }
+                        if (layer.exit ?? .cut) != .cut, fade > .zero {
+                            let ramp = CMTimeRange(start: spanEnd - fade, duration: fade).intersection(visible)
+                            if ramp.duration > .zero {
+                                parameters.setVolumeRamp(fromStartVolume: gain * Float((spanEnd - ramp.start).seconds / fade.seconds),
+                                                         toEndVolume: gain * Float((spanEnd - ramp.end).seconds / fade.seconds), timeRange: ramp)
+                            }
+                        }
+                        audioParameters.append(parameters)
+                    }
+                }
+            }
+        } else if includeVisualLayers {
             var image: CGImage?
             if layer.kind == .image {
                 guard let id = layer.sourceID else { throw MovieError(L10n.text("画像レイヤーに素材が設定されていません。")) }
@@ -307,7 +383,23 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
     audio.inputParameters = audioParameters.filter { parameter in
         asset.track(withTrackID: parameter.trackID) != nil
     }
-    video.instructions = instructions
+    // Boundaries ensure each compositor request requires only overlay tracks that
+    // actually contain a frame. Preserve the original transition/fade time base.
+    let boundaries = timeline.layers.filter { $0.kind == .video }.flatMap { [frameTime($0.start), frameTime($0.end)] }
+    video.instructions = instructions.flatMap { raw -> [AVVideoCompositionInstructionProtocol] in
+        guard let instruction = raw as? PictureInstruction else { return [raw] }
+        let cuts = ([instruction.timeRange.start] + boundaries.filter {
+            $0 > instruction.timeRange.start && $0 < instruction.timeRange.end
+        } + [instruction.timeRange.end]).sorted { $0 < $1 }
+        return zip(cuts, cuts.dropFirst()).compactMap { start, end in
+            guard end > start else { return nil }
+            return PictureInstruction(range: CMTimeRange(start: start, end: end), primary: instruction.primary,
+                                      previous: instruction.previous, transition: instruction.transition,
+                                      fadeIn: instruction.fadeIn, fadeOut: instruction.fadeOut,
+                                      effects: instruction.effects, layerPreview: instruction.layerPreview,
+                                      animationRange: instruction.animationRange)
+        }
+    }
     return EditComposition(asset: asset, video: video, audio: audio, frames: end)
 }
 

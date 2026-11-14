@@ -95,9 +95,24 @@ struct LayerInspector: View {
                     get: { current.rectangleOpacity ?? 1 },
                     set: { value in editor.updateLayer(layer.id) { $0.rectangleOpacity = value } }
                 ))
-            } else if layer.kind == .image {
+            } else if layer.kind == .image || layer.kind == .video {
                 if let source = editor.project.sources.first(where: { $0.id == layer.sourceID }) {
                     Text(source.name).lineLimit(1).font(.caption)
+                    if layer.kind == .video {
+                        field(L10n.text("素材の開始"), value: Binding(get: { current.videoSourceStart ?? 0 }, set: { value in
+                            editor.updateLayer(layer.id) {
+                                $0.videoSourceStart = min(max(0, value), max(0, source.frames - 1))
+                                $0.end = min($0.end, $0.start + source.frames - ($0.videoSourceStart ?? 0))
+                            }
+                        }), fullWidth: true)
+                        Toggle(L10n.text("無音化"), isOn: Binding(get: { current.videoMuted == true }, set: { value in
+                            editor.updateLayer(layer.id) { $0.videoMuted = value ? true : nil }
+                        }))
+                        slider(L10n.text("音量"), value: Binding(get: { current.videoVolume ?? 1 }, set: { value in
+                            editor.updateLayer(layer.id) { $0.videoVolume = value }
+                        }))
+                    }
+
                     if !FileManager.default.fileExists(atPath: source.path) {
                         Button(L10n.text("元ファイルを再指定…")) { editor.relink(source) }.disabled(editor.loadingSources)
                     }
@@ -155,13 +170,13 @@ struct LayerInspector: View {
         .font(.caption)
     }
 
-    private func field(_ label: String, value: Binding<Int>) -> some View {
-        let labelWidth: CGFloat = language.resolved == .english ? 41 : 28
+    private func field(_ label: String, value: Binding<Int>, fullWidth: Bool = false) -> some View {
+        let labelWidth: CGFloat = fullWidth ? 82 : language.resolved == .english ? 41 : 28
         return HStack(spacing: 5) {
             Text(label).lineLimit(1).frame(width: labelWidth, alignment: .leading)
             TextField(label, value: value, format: .number.grouping(.never))
                 .textFieldStyle(.roundedBorder)
-                .frame(width: (width - 10) / 2 - labelWidth - 5).editorHover()
+                .frame(width: (fullWidth ? width : (width - 10) / 2) - labelWidth - 5).editorHover()
                 .accessibilityLabel(label)
         }
         .font(.caption.monospacedDigit())

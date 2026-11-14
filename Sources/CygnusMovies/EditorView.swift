@@ -26,6 +26,8 @@ struct EditorView: View {
     @State private var showExportProgress = false
     @State private var inspectorTab = InspectorTab.timeline
     @State private var timelineDropTarget: UUID?
+    @State private var timelineReorderTarget: UUID?
+    @State private var timelineReordering: UUID?
     @State private var dragAvatar: TimelineDragAvatar?
     @State private var timelineTabFrames: [UUID: CGRect] = [:]
     @State private var timelineTabViewport = CGRect.null
@@ -46,7 +48,7 @@ struct EditorView: View {
         let _ = language
 
         GeometryReader { geometry in
-            let base: CGFloat = showWaveform ? 260 : 220
+            let base: CGFloat = (showWaveform ? 260 : 220) + (geometry.size.width < 1250 ? 38 : 0)
             let row = TimelineTrack.layerRowHeight
             let available = max(1, Int((geometry.size.height - 55 - 180 - base) / row))
             let inspectorWidth: CGFloat = 288
@@ -102,6 +104,9 @@ struct EditorView: View {
             case .clip, .layer: inspectorTab = .selection
             case .source, nil: inspectorTab = .timeline
             }
+        }
+        .onChange(of: editor.autoFitToken) { _ in
+            if let frames = editor.autoFitFrames, frames > 0 { fittedScaleFrames = frames }
         }
         .tint(accent)
         .buttonStyle(HoverButtonStyle())
@@ -179,6 +184,10 @@ struct EditorView: View {
             .help(L10n.text("プロジェクト名を変更"))
             .accessibilityLabel(L10n.text("プロジェクト名を変更"))
             Spacer()
+            Button(action: editor.undo) { Image(systemName: "arrow.uturn.backward") }
+                .help(L10n.text("取り消す（⌘Z）")).disabled(!editor.canUndo)
+            Button(action: editor.redo) { Image(systemName: "arrow.uturn.forward") }
+                .help(L10n.text("やり直す（⇧⌘Z）")).disabled(!editor.canRedo)
             Button { editor.save() } label: { Label(L10n.text("保存"), systemImage: "tray.and.arrow.down") }
             if !editor.jobs.isEmpty {
                 Button { editor.showingJobs = true } label: { Label(L10n.text("書き出し状況"), systemImage: "list.bullet.rectangle") }
@@ -605,7 +614,9 @@ struct EditorView: View {
     }
 
     private func timelineArea(layerHeight: CGFloat, viewportWidth: CGFloat) -> some View {
-        VStack(spacing: 0) {
+        let compact = viewportWidth < 1250
+        let controls = compact ? AnyLayout(VStackLayout(spacing: 3)) : AnyLayout(HStackLayout(spacing: 10))
+        return VStack(spacing: 0) {
             HStack(spacing: 10) {
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal) {
@@ -628,69 +639,86 @@ struct EditorView: View {
             }
             .padding(.horizontal, 13).frame(height: 37).background(surface)
             Divider()
-            HStack(spacing: 10) {
-                Button(action: editor.split) { Label(L10n.text("分割"), systemImage: "scissors") }
-                    .help(L10n.text("再生位置でクリップとレイヤーを分割")).disabled(!editor.canSplit)
-                Button(action: editor.deleteSelection) { Label(L10n.text("削除"), systemImage: "trash") }
-                    .buttonStyle(HoverColorButtonStyle(color: accent, hoverColor: .red, bordered: true))
-                    .help(L10n.text("選択したクリップ・レイヤーを取り除く"))
-                    .disabled(!editor.hasTimelineSelection)
-                if editor.selectedLayer != nil {
-                    layerOrderButton(-1)
-                    layerOrderButton(1)
-                    Button(action: editor.duplicateLayer) { Label(L10n.text("複製"), systemImage: "plus.square.on.square") }
-                        .help(L10n.text("レイヤーを複製"))
-                } else {
-                    moveButton(-1)
-                    moveButton(1)
-                }
-                Menu {
-                    ForEach(LayerKind.allCases.filter { $0 != .image }, id: \.self) { kind in
-                        Button { editor.addLayer(kind) } label: {
-                            Label { Text(kind.title) } icon: { LayerIcon(kind: kind) }
-                        }
+            controls {
+                HStack(spacing: 10) {
+                    Button(action: editor.split) { Label(L10n.text("分割"), systemImage: "scissors") }
+                        .help(L10n.text("再生位置でクリップとレイヤーを分割")).disabled(!editor.canSplit)
+                    Button(action: editor.deleteSelection) { Label(L10n.text("削除"), systemImage: "trash") }
+                        .buttonStyle(HoverColorButtonStyle(color: accent, hoverColor: .red, bordered: true))
+                        .help(L10n.text("選択したクリップ・レイヤーを取り除く"))
+                        .disabled(!editor.hasTimelineSelection)
+                    if editor.selectedLayer != nil {
+                        layerOrderButton(-1)
+                        layerOrderButton(1)
+                        Button(action: editor.duplicateLayer) { Label(L10n.text("複製"), systemImage: "plus.square.on.square") }
+                            .help(L10n.text("レイヤーを複製"))
+                    } else {
+                        moveButton(-1)
+                        moveButton(1)
                     }
                     Menu {
-                        ForEach(editor.librarySources.filter(\.isImage)) { source in
-                            Button(source.name) { editor.addLayer(.image, source: source) }
+                        ForEach(LayerKind.allCases.filter { $0 != .image && $0 != .video }, id: \.self) { kind in
+                            Button { addVisibleLayer(kind, viewportWidth: viewportWidth) } label: {
+                                Label { Text(kind.title) } icon: { LayerIcon(kind: kind) }
+                            }
                         }
-                        Button(L10n.text("画像ファイルを選ぶ…"), action: editor.chooseLayerImage)
-                            .disabled(editor.loadingSources)
+                        Menu {
+                            ForEach(editor.librarySources.filter(\.isImage)) { source in
+                                Button(source.name) { addVisibleLayer(.image, source: source, viewportWidth: viewportWidth) }
+                            }
+                            Button(L10n.text("画像ファイルを選ぶ…")) {
+                                editor.chooseLayerMedia(.image, duration: defaultLayerFrames(viewportWidth))
+                            }
+                                .disabled(editor.loadingSources)
+                        } label: {
+                            LayerLabel(kind: .image, title: L10n.text("画像"))
+                        }
+                        Menu {
+                            ForEach(editor.librarySources.filter { !$0.isImage }) { source in
+                                Button(source.name) { addVisibleLayer(.video, source: source, viewportWidth: viewportWidth) }
+                            }
+                            Button(L10n.text("動画ファイルを選ぶ…")) {
+                                editor.chooseLayerMedia(.video, duration: defaultLayerFrames(viewportWidth)) { layer in
+                                    ensureVideoLayerWidth(layer, viewportWidth: viewportWidth)
+                                }
+                            }.disabled(editor.loadingSources)
+                        } label: { LayerLabel(kind: .video, title: L10n.text("動画")) }
                     } label: {
-                        LayerLabel(kind: .image, title: L10n.text("画像"))
+                        Label(L10n.text("レイヤーを追加"), systemImage: "square.3.layers.3d")
                     }
-                } label: {
-                    Label(L10n.text("レイヤーを追加"), systemImage: "square.3.layers.3d")
+                    .fixedSize()
+                    .editorHover()
                 }
-                .fixedSize()
-                .editorHover()
-                Spacer()
-                Toggle(L10n.text("吸着"), isOn: $snapping)
-                    .toggleStyle(.switch).controlSize(.small).editorHoverBrightness()
-                    .help(L10n.text("ドラッグ中にクリップや隣のレイヤーの端に吸着"))
-                Toggle(L10n.text("音声波形"), isOn: $showWaveform)
-                    .toggleStyle(.switch).controlSize(.small).editorHoverBrightness()
-                    .help(L10n.text("すべてのタイムラインで音声波形を表示"))
+                .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: 10) {
-                    Text(L10n.text("ズーム")).font(.caption).foregroundStyle(.secondary)
-                    Slider(value: Binding(get: {
-                        fittedScaleFrames > 0 ? TimelineScale(width: viewportWidth).zoomToFit(frames: fittedScaleFrames) : zoom
-                    }, set: { value in
-                        fittedScaleFrames = 0
-                        zoom = value
-                    }), in: 0...1)
-                        .frame(width: 105)
-                        .accessibilityLabel(L10n.text("タイムラインのズーム"))
+                    Spacer(minLength: 0)
+                    Toggle(isOn: $snapping) { Label(L10n.text("吸着"), systemImage: "align.horizontal.center") }
+                        .toggleStyle(.switch).controlSize(.small).editorHoverBrightness()
+                        .help(L10n.text("ドラッグ中にクリップや隣のレイヤーの端に吸着"))
+                    Toggle(isOn: $showWaveform) { Label(L10n.text("音声波形"), systemImage: "waveform") }
+                        .toggleStyle(.switch).controlSize(.small).editorHoverBrightness()
+                        .help(L10n.text("すべてのタイムラインで音声波形を表示"))
+                    HStack(spacing: 10) {
+                        Label(L10n.text("ズーム"), systemImage: "magnifyingglass").font(.caption).foregroundStyle(.secondary)
+                        Slider(value: Binding(get: {
+                            fittedScaleFrames > 0 ? TimelineScale(width: viewportWidth).zoomToFit(frames: fittedScaleFrames) : zoom
+                        }, set: { value in
+                            fittedScaleFrames = 0
+                            zoom = value
+                        }), in: 0...1)
+                            .frame(width: 105)
+                            .accessibilityLabel(L10n.text("タイムラインのズーム"))
+                    }
+                    .editorHoverBrightness()
+                    Button { fittedScaleFrames = fittedFrames } label: {
+                        Image(systemName: "arrow.left.and.right.square")
+                    }
+                    .help(L10n.text("全尺を表示幅に合わせる"))
+                    .accessibilityLabel(L10n.text("全尺を表示幅に合わせる"))
+                    .disabled(fittedFrames == 0)
                 }
-                .editorHoverBrightness()
-                Button { fittedScaleFrames = fittedFrames } label: {
-                    Image(systemName: "arrow.left.and.right.square")
-                }
-                .help(L10n.text("全尺を表示幅に合わせる"))
-                .accessibilityLabel(L10n.text("全尺を表示幅に合わせる"))
-                .disabled(fittedFrames == 0)
             }
-            .padding(.horizontal, 13).frame(height: 38)
+            .padding(.horizontal, 13).frame(height: compact ? 76 : 38)
             TimelineTrack(editor: editor, zoom: zoom, fittedFrames: fittedScaleFrames > 0 ? fittedScaleFrames : nil,
                           snapping: snapping, layerHeight: layerHeight,
                           tabFrames: timelineTabFrames.mapValues { $0.intersection(timelineTabViewport) },
@@ -703,8 +731,37 @@ struct EditorView: View {
         editor.totalFrames
     }
 
+    private func defaultLayerFrames(_ width: Double) -> Int {
+        let scale = TimelineScale(width: width)
+        let points = scale.pointsPerSecond(zoom: zoom, fittedFrames: fittedScaleFrames > 0 ? fittedScaleFrames : nil)
+        return min(VisualLayer.maximumEnd, max(180, Int(ceil(110 / points * 30))))
+    }
+
+    private func addVisibleLayer(_ kind: LayerKind, source: Source? = nil, viewportWidth: Double) {
+        editor.addLayer(kind, source: source, duration: defaultLayerFrames(viewportWidth))
+        if let layer = editor.selectedLayer, kind == .video {
+            ensureVideoLayerWidth(layer, viewportWidth: viewportWidth)
+        }
+    }
+
+    private func ensureVideoLayerWidth(_ layer: VisualLayer, viewportWidth: Double) {
+        let length = layer.end - layer.start
+        let scale = TimelineScale(width: viewportWidth)
+        let points = scale.pointsPerSecond(zoom: zoom, fittedFrames: fittedScaleFrames > 0 ? fittedScaleFrames : nil)
+        if Double(length) / 30 * points < 110 {
+            fittedScaleFrames = max(1, Int(Double(length) * scale.usableWidth / 110))
+        }
+    }
+
     private var timelineActions: some View {
         HStack(spacing: 10) {
+            ForEach([-1, 1], id: \.self) { step in
+                Button { editor.moveTimeline(editor.timeline.id, by: step) } label: {
+                    Image(systemName: step < 0 ? "arrow.left" : "arrow.right")
+                }
+                .help(step < 0 ? L10n.text("タイムラインを左へ移動") : L10n.text("タイムラインを右へ移動"))
+                .disabled(!editor.canMoveTimeline(editor.timeline.id, by: step))
+            }
             Button { requestTimelineRename(editor.timeline) } label: { Label(L10n.text("名前"), systemImage: "pencil") }
                 .help(L10n.text("選択中のタイムライン名を変更"))
                 .accessibilityLabel(L10n.text("選択中のタイムライン名を変更"))
@@ -731,9 +788,17 @@ struct EditorView: View {
         .fixedSize()
     }
 
+    private func reorderTarget(at point: CGPoint) -> (id: UUID, frame: CGRect)? {
+        guard timelineTabViewport.contains(point) else { return nil }
+        return editor.project.timelines.compactMap { timeline -> (UUID, CGRect)? in
+            guard let frame = timelineTabFrames[timeline.id], frame.contains(point) else { return nil }
+            return (timeline.id, frame)
+        }.first
+    }
+
     private func timelineTab(_ timeline: Timeline) -> some View {
         let selected = editor.timeline.id == timeline.id
-        let receivingDrop = timelineDropTarget == timeline.id
+        let receivingDrop = timelineDropTarget == timeline.id || timelineReorderTarget == timeline.id
         return Button { editor.selectTimeline(timeline.id) } label: {
             Text(editor.timelineDisplayName(timeline))
                 .lineLimit(1).frame(maxWidth: 145)
@@ -744,6 +809,20 @@ struct EditorView: View {
         }
         .buttonStyle(.plain)
         .editorHover()
+        .opacity(timelineReordering == timeline.id ? 0.55 : 1)
+        .simultaneousGesture(DragGesture(minimumDistance: 5, coordinateSpace: .named(TimelineScale.editorSpace))
+            .onChanged { value in
+                timelineReordering = timeline.id
+                timelineReorderTarget = reorderTarget(at: value.location)?.id
+            }
+            .onEnded { value in
+                if let target = reorderTarget(at: value.location),
+                   let index = editor.project.timelines.firstIndex(where: { $0.id == target.id }) {
+                    editor.moveTimeline(timeline.id, to: index + (value.location.x > target.frame.midX ? 1 : 0))
+                }
+                timelineReordering = nil
+                timelineReorderTarget = nil
+            })
         .foregroundStyle(receivingDrop ? .black : selected ? accent : .secondary)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(TimelineScale.editorSpace)) } action: {
             timelineTabFrames[timeline.id] = $0

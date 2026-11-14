@@ -591,6 +591,7 @@ private struct LayerBlock: View {
         case .text: .purple
         case .rectangle: .pink
         case .image: .teal
+        case .video: .indigo
 
         case .blur: .blue
         case .mosaic: .orange
@@ -684,7 +685,13 @@ private struct LayerBlock: View {
     }
 
     private func trimLimits(start: Bool) -> ClosedRange<Int> {
-        start ? (-layer.start)...(length - 1) : (1 - length)...(VisualLayer.maximumEnd - layer.end)
+        if layer.kind == .video {
+            let sourceFrames = editor.project.sources.first { $0.id == layer.sourceID }?.frames ?? length
+            let offset = layer.videoSourceStart ?? 0
+            return start ? (-min(layer.start, offset))...(length - 1)
+                : (1 - length)...max(0, sourceFrames - offset - length)
+        }
+        return start ? (-layer.start)...(length - 1) : (1 - length)...(VisualLayer.maximumEnd - layer.end)
     }
 
     private func trim(_ value: DragGesture.Value, start: Bool) -> TimelineSnap.Adjustment {

@@ -97,6 +97,8 @@ final class Editor: ObservableObject {
     let player = AVPlayer()
     let temporaryMedia = TemporaryMediaStore()
     @Published var copyingFrame = false
+    @Published private(set) var autoFitFrames: Int?
+    @Published private(set) var autoFitToken = UUID()
 
     var canCaptureFrame: Bool { timeline.hasContent && previewError == nil && !loadingSources }
     var overallExportProgress: Double {
@@ -273,6 +275,26 @@ final class Editor: ObservableObject {
         previewFrame = 0
     }
 
+    func canMoveTimeline(_ id: UUID, by step: Int) -> Bool {
+        guard let index = project.timelines.firstIndex(where: { $0.id == id }) else { return false }
+        return project.timelines.indices.contains(index + step)
+    }
+
+    func moveTimeline(_ id: UUID, by step: Int) {
+        guard let index = project.timelines.firstIndex(where: { $0.id == id }), canMoveTimeline(id, by: step) else { return }
+        moveTimeline(id, to: index + (step < 0 ? -1 : 2))
+    }
+
+    func moveTimeline(_ id: UUID, to insertion: Int) {
+        guard let index = project.timelines.firstIndex(where: { $0.id == id }) else { return }
+        let destination = min(project.timelines.count, max(0, insertion)) - (index < insertion ? 1 : 0)
+        guard destination != index else { return }
+        edit {
+            let moved = project.timelines.remove(at: index)
+            project.timelines.insert(moved, at: destination)
+        }
+    }
+
     func addTimeline() {
         addTimeline(with: nil)
     }
@@ -339,12 +361,16 @@ final class Editor: ObservableObject {
 
     func addClip(_ source: Source, at index: Int? = nil, to destination: UUID? = nil) {
         guard let target = project.timelines.firstIndex(where: { $0.id == (destination ?? timeline.id) }) else { return }
+        let firstVideo = !source.isImage && !project.timelines.flatMap(\.clips).contains { clip in
+            project.sources.first(where: { $0.id == clip.sourceID })?.isImage == false
+        }
         let clip = Clip(sourceID: source.id, end: source.isImage ? min(150, source.frames) : source.frames)
         edit {
             let position = min(project.timelines[target].clips.count, max(0, index ?? project.timelines[target].clips.count))
             project.timelines[target].clips.insert(clip, at: position)
             if timelineIndex == target { selectClip(clip.id) }
         }
+        if firstVideo { autoFitFrames = max(1, timelineFrames(project.timelines[target])); autoFitToken = UUID() }
     }
 
     func moveClip(_ id: UUID, to insertion: Int) {
@@ -558,17 +584,19 @@ final class Editor: ObservableObject {
         }
     }
 
-    func addLayer(_ kind: LayerKind, source: Source? = nil) {
+    func addLayer(_ kind: LayerKind, source: Source? = nil, duration: Int = 180) {
         guard kind != .image || source?.isImage == true else { return }
-        let start = min(playhead, VisualLayer.maximumEnd - 90)
+        guard kind != .video || source?.isImage == false else { return }
+        let length = min(VisualLayer.maximumEnd, kind == .video ? min(max(1, duration), source!.frames) : max(180, duration))
+        let start = min(playhead, VisualLayer.maximumEnd - length)
         let region: CanvasRegion
         switch kind {
         case .text: region = CanvasRegion(x: 0.1, y: 0.69, width: 0.8, height: 0.23)
-        case .image: region = CanvasRegion(x: 0.23, y: 0.23, width: 0.54, height: 0.54)
+        case .image, .video: region = CanvasRegion(x: 0.23, y: 0.23, width: 0.54, height: 0.54)
         case .rectangle: region = CanvasRegion(x: 0.3, y: 0.35, width: 0.4, height: 0.3)
         case .blur, .mosaic: region = CanvasRegion(x: 0.32, y: 0.32, width: 0.36, height: 0.36)
         }
-        var layer = VisualLayer(kind: kind, start: start, end: start + 90, region: region, sourceID: source?.id)
+        var layer = VisualLayer(kind: kind, start: start, end: start + length, region: region, sourceID: source?.id)
         if kind == .text {
             let canvas = timeline.output.size
             layer.outlinePixels = layer.strokePixels(in: canvas)
@@ -613,11 +641,20 @@ final class Editor: ObservableObject {
     }
 
     func trimLayer(_ id: UUID, start: Int? = nil, end: Int? = nil) {
+        let sourceFrames = timeline.layers.first(where: { $0.id == id }).flatMap { layer in
+            project.sources.first(where: { $0.id == layer.sourceID })?.frames
+        }
         updateLayer(id) {
             let previousStart = $0.start
             let previousEnd = $0.end
             if let start { $0.start = min($0.end - 1, max(0, start)) }
             if let end { $0.end = min(VisualLayer.maximumEnd, max($0.start + 1, end)) }
+            if $0.kind == .video, let sourceFrames {
+                let oldOffset = $0.videoSourceStart ?? 0
+                $0.start = max(previousStart - oldOffset, $0.start)
+                $0.videoSourceStart = oldOffset + $0.start - previousStart
+                $0.end = min($0.end, $0.start + sourceFrames - ($0.videoSourceStart ?? 0))
+            }
             if $0.start != previousStart || $0.end != previousEnd { $0.animationSpan = nil }
         }
     }
@@ -733,6 +770,7 @@ final class Editor: ObservableObject {
                     left.end = cut
                     right.id = UUID()
                     right.start = cut
+                    if layer.kind == .video { right.videoSourceStart = (layer.videoSourceStart ?? 0) + cut - layer.start }
                     if (layer.entrance ?? .cut) != .cut || (layer.exit ?? .cut) != .cut {
                         left.animationSpan = .init(offset: layer.animationStart - left.start, length: layer.animationLength)
                         right.animationSpan = .init(offset: layer.animationStart - right.start, length: layer.animationLength)
@@ -927,6 +965,7 @@ final class Editor: ObservableObject {
         }
         var source = try await inspectSource(url)
         source.temporary = temporary ? true : nil
+        let firstVideo = !source.isImage && !project.sources.contains(where: { !$0.isImage })
         guard generation == projectGeneration else { throw CancellationError() }
         edit {
             project.sources.append(source)
@@ -937,6 +976,7 @@ final class Editor: ObservableObject {
         }
         lastImportedURL = url
         await initializeOutputDefaults()
+        if firstVideo { autoFitFrames = max(totalFrames, source.frames); autoFitToken = UUID() }
         return source
     }
 
@@ -960,21 +1000,24 @@ final class Editor: ObservableObject {
         }
     }
 
-    func chooseLayerImage() {
-        guard !loadingSources else { return }
-        let panel = mediaPanel(multiple: false, types: [.image])
-        panel.title = L10n.text("画像レイヤーを追加")
+    func chooseLayerImage() { chooseLayerMedia(.image, duration: 180) }
+
+    func chooseLayerMedia(_ kind: LayerKind, duration: Int, onAdded: ((VisualLayer) -> Void)? = nil) {
+        guard !loadingSources, kind == .image || kind == .video else { return }
+        let panel = mediaPanel(multiple: false, types: kind == .image ? [.image] : [.mpeg4Movie, .quickTimeMovie])
+        panel.title = kind == .image ? L10n.text("画像レイヤーを追加") : L10n.text("動画レイヤーを追加")
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let timelineID = timeline.id
+        let target = timeline.id
         loadingSources = true
         Task {
             defer { loadingSources = false }
             do {
                 let source = try await registerSource(url)
-                if timeline.id == timelineID { addLayer(.image, source: source) }
-            } catch {
-                self.error = error.localizedDescription
-            }
+                if timeline.id == target {
+                    addLayer(kind, source: source, duration: kind == .video ? source.frames : duration)
+                    if let layer = selectedLayer { onAdded?(layer) }
+                }
+            } catch { self.error = error.localizedDescription }
         }
     }
 
@@ -990,7 +1033,10 @@ final class Editor: ObservableObject {
                 guard replacement.isImage == source.isImage else {
                     throw MovieError(L10n.text("元の素材と同じ種類のファイルを選択してください。"))
                 }
-                let usedEnd = project.timelines.flatMap(\.clips).filter { $0.sourceID == source.id }.map(\.end).max() ?? 0
+                let clipEnd = project.timelines.flatMap(\.clips).filter { $0.sourceID == source.id }.map(\.end).max() ?? 0
+                let layerEnd = project.timelines.flatMap(\.layers).filter { $0.kind == .video && $0.sourceID == source.id }
+                    .map { ($0.videoSourceStart ?? 0) + $0.end - $0.start }.max() ?? 0
+                let usedEnd = max(clipEnd, layerEnd)
                 guard replacement.frames >= usedEnd else {
                     throw MovieError(L10n.text("選んだファイルは、タイムラインで使用中の区間より短い動画です。"))
                 }
@@ -1028,7 +1074,7 @@ final class Editor: ObservableObject {
         if project.sources.contains(where: { $0.temporary == true }) {
             let alert = NSAlert()
             alert.messageText = L10n.text("一時素材は保存されません")
-            alert.informativeText = L10n.text("一時素材と、それを使うクリップ・画像レイヤーは保存対象から外れます。書き出した動画には含まれます。")
+            alert.informativeText = L10n.text("一時素材と、それを使うクリップ・画像／動画レイヤーは保存対象から外れます。書き出した動画には含まれます。")
             alert.addButton(withTitle: L10n.text("保存を続ける"))
             alert.addButton(withTitle: L10n.text("キャンセル"))
             guard alert.runModal() == .alertFirstButtonReturn else { return false }
@@ -1104,6 +1150,7 @@ final class Editor: ObservableObject {
     }
 
     private func replaceProject(_ document: Project, url: URL?) {
+        autoFitFrames = nil
         projectGeneration = UUID()
         player.replaceCurrentItem(with: nil)
         layerPreview.reset()

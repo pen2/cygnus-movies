@@ -344,3 +344,18 @@
 "音声を読み込めません。" = "Could not read the audio.";
 
 "音声を変換できません。" = "Could not convert the audio.";
+
+"取り消す（⌘Z）" = "Undo (⌘Z)";
+"やり直す（⇧⌘Z）" = "Redo (⇧⌘Z)";
+"タイムラインを左へ移動" = "Move Timeline Left";
+"タイムラインを右へ移動" = "Move Timeline Right";
+"動画レイヤー" = "Video Layer";
+"動画ファイルを選ぶ…" = "Choose Video File…";
+"素材の開始" = "Source Start";
+"動画レイヤーに素材が設定されていません。" = "The video layer has no source media.";
+"動画レイヤーの使用区間が素材の長さを超えています。" = "The video layer range exceeds its source duration.";
+"並べ替えと動画レイヤー" = "Reordering and Video Layers";
+"タイムラインのタブをドラッグするか、「名前」の左の矢印で順番を変更できます。連番もこの順番に従います。画面右上の矢印で取り消し・やり直しができます。最初の動画を読み込んだときと、最初の動画クリップを配置したときに全尺を画面に合わせます。新しいレイヤーは現在のズームで読める幅を目安に追加されます。「レイヤーを追加」→「動画」では、素材欄またはファイルから動画を重ねられます。表示区間・位置・大きさ・重なり順・素材の開始・音量・無音化を編集でき、分割や前後の切り替え効果にも対応します。" = "Drag timeline tabs or use the arrows beside Name to reorder them. Numbering follows this order. Use the top-right arrows to undo or redo. The first video import and first video clip placement fit the full duration in view. New layers start wide enough to identify at the current zoom. Choose Add Layer > Movie to overlay a library video or a file. Edit its time range, position, size, stacking order, source start, volume and mute settings. Splitting and entrance/exit effects are supported.";
+
+"動画レイヤーを追加" = "Add Video Layer";
+"一時素材と、それを使うクリップ・画像／動画レイヤーは保存対象から外れます。書き出した動画には含まれます。" = "Temporary media and its clips, image layers and video layers are excluded from the saved project. They are included in exported movies.";
