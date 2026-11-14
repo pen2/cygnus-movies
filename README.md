@@ -8,11 +8,13 @@
 
 **[最新版をダウンロードする（配布ページ）](https://github.com/pen2/cygnus-movies/releases/latest)**
 
-**[v1.7.3のZIPを直接ダウンロード](https://github.com/pen2/cygnus-movies/releases/download/v1.7.3/cygnus-movies-1.7.3-macOS-universal.zip)** · 約2.5MB · macOS 13以降 · Apple silicon / Intel両対応
+**[v1.7.4のZIPを直接ダウンロード](https://github.com/pen2/cygnus-movies/releases/download/v1.7.4/cygnus-movies-1.7.4-macOS-universal.zip)** · 約2.5MB · macOS 13以降 · Apple silicon / Intel両対応
 
 1. ZIPをダウンロードして、ダブルクリックで展開します。
 2. **cygnus movies.app** を「アプリケーション」フォルダにドラッグします。
 3. アプリを起動し、MOV・MP4の動画や画像を素材欄にドロップして編集を始めます。
+
+Finderで素材を右クリックし、「このアプリケーションで開く」→「cygnus movies」を選んでも読み込めます。起動していない場合は、指定した素材だけを読み込んで起動します。起動済みの場合は現在のプロジェクトへ追加します。複数ファイルにも対応しています。素材はまず素材欄に入り、タイムラインへの配置は手動で行います。
 
 配布版はDeveloper IDで正式署名し、Appleの公証を受けています。初回起動時は、インターネットからダウンロードしたアプリを開くかどうか、macOS標準の確認が表示される場合があります。
 

@@ -989,14 +989,17 @@ final class Editor: ObservableObject {
         openProject(at: url)
     }
 
-    func openProject(at url: URL) {
-        guard !loadingSources, mayDiscardChanges() else { return }
+    @discardableResult
+    func openProject(at url: URL) -> Bool {
+        guard !loadingSources, mayDiscardChanges() else { return false }
         do {
             let document = try JSONDecoder().decode(Project.self, from: Data(contentsOf: url))
             try document.validate()
             replaceProject(document, url: url)
+            return true
         } catch {
             self.error = error.localizedDescription
+            return false
         }
     }
 
