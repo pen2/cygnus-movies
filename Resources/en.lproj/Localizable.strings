@@ -338,3 +338,9 @@
 
 "プレビューと一時素材" = "Preview and temporary media";
 "Spaceで再生・停止、左右キーで1コマずつ移動します。フレーム表示の右のボタンで、テキストや効果を含めた画像をコピー・共有できます。「クリップボードから一時追加」は画像・動画をこの起動中だけ素材として扱います。一時素材と使用クリップ・画像レイヤーはプロジェクトには保存されず、終了時に破棄されます。動画の書き出しには含まれます。複数書き出しの全体進捗は、書き出し状況とタイトルバーに表示されます。" = "Use Space to play or pause and the arrow keys to step one frame. Buttons beside the frame counter copy or share the frame, including text and effects. Temporary clipboard media is available only during this app session. It and its clips and image layers are excluded from saved projects and discarded on quit, but are included in exported movies. Batch export progress appears in the export status window and the title bar.";
+
+"音声のサンプリング周波数を変換できません。" = "Could not convert the audio sample rate.";
+
+"音声を読み込めません。" = "Could not read the audio.";
+
+"音声を変換できません。" = "Could not convert the audio.";

@@ -241,34 +241,39 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
         let parameters = audioParameters[lane]
         let gain = clip.gain
 
-        if let sourceAudio = media?.audio, let audioRange = media?.audioRange {
+        if let movie = media, let sourceAudio = movie.audio, let audioRange = movie.audioRange {
             let available = sourceRange.intersection(audioRange)
             if available.duration > .zero {
-                let ratio = frameTime(clip.length).seconds / sourceRange.duration.seconds
-                let offset = CMTimeMultiplyByFloat64(available.start - sourceRange.start, multiplier: ratio)
-                let duration = CMTimeMultiplyByFloat64(available.duration, multiplier: ratio)
-                let soundStart = startTime + offset
-                try audioTracks[lane].insertTimeRange(available, of: sourceAudio, at: soundStart)
-                audioTracks[lane].scaleTimeRange(CMTimeRange(start: soundStart, duration: available.duration),
-                                                toDuration: duration)
-                if placement.overlapBefore > 0 {
-                    parameters.setVolumeRamp(fromStartVolume: 0, toEndVolume: gain,
-                                             timeRange: frameRange(placement.start, placement.overlapBefore))
-                }
-                if fadeIn > 0 {
-                    parameters.setVolumeRamp(fromStartVolume: 0, toEndVolume: gain, timeRange: frameRange(bodyStart, fadeIn))
-                }
-                let steadyLength = bodyLength - fadeIn - fadeOut
-                if steadyLength > 0 {
-                    parameters.setVolumeRamp(fromStartVolume: gain, toEndVolume: gain,
-                                             timeRange: frameRange(bodyStart + fadeIn, steadyLength))
-                }
-                if fadeOut > 0 {
-                    parameters.setVolumeRamp(fromStartVolume: gain, toEndVolume: 0, timeRange: frameRange(bodyEnd - fadeOut, fadeOut))
-                }
-                if placement.overlapAfter > 0 {
-                    parameters.setVolumeRamp(fromStartVolume: gain, toEndVolume: 0,
-                                             timeRange: frameRange(bodyEnd, placement.overlapAfter))
+                let prepared = try await AudioPreparationCache.shared.prepare(asset: movie.asset, track: sourceAudio, range: audioRange)
+                let mapped = prepared.mappedRange(available)
+                let readable = mapped.intersection(prepared.range)
+                if readable.duration > .zero {
+                    let ratio = frameTime(clip.length).seconds / sourceRange.duration.seconds
+                    let offset = CMTimeMultiplyByFloat64(available.start - sourceRange.start + readable.start - mapped.start, multiplier: ratio)
+                    let duration = CMTimeMultiplyByFloat64(readable.duration, multiplier: ratio)
+                    let soundStart = startTime + offset
+                    try audioTracks[lane].insertTimeRange(readable, of: prepared.track, at: soundStart)
+                    audioTracks[lane].scaleTimeRange(CMTimeRange(start: soundStart, duration: readable.duration),
+                                                    toDuration: duration)
+                    if placement.overlapBefore > 0 {
+                        parameters.setVolumeRamp(fromStartVolume: 0, toEndVolume: gain,
+                                                 timeRange: frameRange(placement.start, placement.overlapBefore))
+                    }
+                    if fadeIn > 0 {
+                        parameters.setVolumeRamp(fromStartVolume: 0, toEndVolume: gain, timeRange: frameRange(bodyStart, fadeIn))
+                    }
+                    let steadyLength = bodyLength - fadeIn - fadeOut
+                    if steadyLength > 0 {
+                        parameters.setVolumeRamp(fromStartVolume: gain, toEndVolume: gain,
+                                                 timeRange: frameRange(bodyStart + fadeIn, steadyLength))
+                    }
+                    if fadeOut > 0 {
+                        parameters.setVolumeRamp(fromStartVolume: gain, toEndVolume: 0, timeRange: frameRange(bodyEnd - fadeOut, fadeOut))
+                    }
+                    if placement.overlapAfter > 0 {
+                        parameters.setVolumeRamp(fromStartVolume: gain, toEndVolume: 0,
+                                                 timeRange: frameRange(bodyEnd, placement.overlapAfter))
+                    }
                 }
             }
         }

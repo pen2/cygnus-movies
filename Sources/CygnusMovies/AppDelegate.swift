@@ -104,5 +104,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         editor?.temporaryMedia.cleanup()
+        AudioPreparationCache.shared.removeTemporaryFiles()
     }
 }
