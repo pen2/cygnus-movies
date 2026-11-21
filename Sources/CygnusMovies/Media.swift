@@ -90,10 +90,18 @@ struct EditComposition {
     let audio: AVMutableAudioMix
     let frames: Int
 
+    func validate() async throws {
+        let range = CMTimeRange(start: .zero, duration: frameTime(frames))
+        guard try await video.isValid(for: asset, timeRange: range, validationDelegate: nil) else {
+            throw MovieError(L10n.text("映像の編集区間に不整合があるため、処理できません。"))
+        }
+    }
+
     func playerItem() -> AVPlayerItem {
         let item = AVPlayerItem(asset: asset)
         item.videoComposition = video
         item.audioMix = audio
+        item.forwardPlaybackEndTime = frameTime(frames)
         item.audioTimePitchAlgorithm = .spectral
         return item
     }
@@ -300,7 +308,9 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
             let sourceDuration = CMTime(seconds: clip.sourceLength / 30, preferredTimescale: 600_000)
             sourceRange = CMTimeRange(start: movie.videoRange.start + sourceStart, duration: sourceDuration)
             try track.insertTimeRange(sourceRange, of: movie.video, at: startTime)
-            track.scaleTimeRange(CMTimeRange(start: startTime, duration: sourceRange.duration), toDuration: frameTime(clip.length))
+            if sourceRange.duration != frameTime(clip.length) {
+                track.scaleTimeRange(CMTimeRange(start: startTime, duration: sourceRange.duration), toDuration: frameTime(clip.length))
+            }
             let transform = movie.transform(in: video.renderSize)
             let fill = includeVisualLayers && clip.canvasFill == .blurred
                 ? movie.transform(in: video.renderSize, fill: true) : transform
@@ -324,13 +334,26 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
                 let mapped = prepared.mappedRange(available)
                 let readable = mapped.intersection(prepared.range)
                 if readable.duration > .zero {
-                    let ratio = frameTime(clip.length).seconds / sourceRange.duration.seconds
-                    let offset = CMTimeMultiplyByFloat64(available.start - sourceRange.start + readable.start - mapped.start, multiplier: ratio)
-                    let duration = CMTimeMultiplyByFloat64(readable.duration, multiplier: ratio)
+                    let targetDuration = frameTime(clip.length)
+                    let retiming = sourceRange.duration != targetDuration
+                    let sourceOffset = available.start - sourceRange.start + readable.start - mapped.start
+                    let ratio = targetDuration.seconds / sourceRange.duration.seconds
+                    // Compare rational times before using floating-point arithmetic.
+                    // Even an unmodified clip can produce ratio = 0.9999999999999999;
+                    // multiplying by it can extend audio past video by a sub-nanosecond.
+                    // Keep native 48 kHz timing when speed is unchanged: rounding it to
+                    // another clock would introduce unintended spectral time stretching.
+                    let offset = retiming ? CMTimeMultiplyByFloat64(sourceOffset, multiplier: ratio)
+                        .convertScale(600_000, method: .roundHalfAwayFromZero) : sourceOffset
                     let soundStart = startTime + offset
+                    let scaledDuration = retiming ? CMTimeMultiplyByFloat64(readable.duration, multiplier: ratio)
+                        .convertScale(600_000, method: .roundHalfAwayFromZero) : readable.duration
+                    let duration = min(scaledDuration, startTime + targetDuration - soundStart)
                     try audioTracks[lane].insertTimeRange(readable, of: prepared.track, at: soundStart)
-                    audioTracks[lane].scaleTimeRange(CMTimeRange(start: soundStart, duration: readable.duration),
-                                                    toDuration: duration)
+                    if readable.duration != duration {
+                        audioTracks[lane].scaleTimeRange(CMTimeRange(start: soundStart, duration: readable.duration),
+                                                        toDuration: duration)
+                    }
                     if placement.overlapBefore > 0 {
                         parameters.setVolumeRamp(fromStartVolume: 0, toEndVolume: gain,
                                                  timeRange: frameRange(placement.start, placement.overlapBefore))
@@ -416,6 +439,10 @@ func sourceThumbnail(_ source: Source, frame: Int = 30) async throws -> CGImage 
 }
 
 func waveform(_ timeline: Timeline, sources: [Source]) async throws -> [Float] {
+    try await WaveformCache.shared.samples(timeline, sources: sources)
+}
+
+private func calculateWaveform(_ timeline: Timeline, sources: [Source]) async throws -> [Float] {
     let edit = try await compose(timeline, sources: sources, includeVisualLayers: false)
     let audioTracks = try await edit.asset.loadTracks(withMediaType: .audio)
     guard !audioTracks.isEmpty else { return [0] }
@@ -433,6 +460,7 @@ func waveform(_ timeline: Timeline, sources: [Source]) async throws -> [Float] {
     output.audioMix = edit.audio
     output.alwaysCopiesSampleData = false
     let reader = try AVAssetReader(asset: edit.asset)
+    reader.timeRange = frameRange(0, edit.frames)
     guard reader.canAdd(output) else { throw MovieError(L10n.text("音声波形を取得できません。")) }
     reader.add(output)
     guard reader.startReading() else { throw reader.error ?? MovieError(L10n.text("音声波形を取得できません。")) }
@@ -472,4 +500,101 @@ func waveform(_ timeline: Timeline, sources: [Source]) async throws -> [Float] {
     }
     if reader.status == .failed { throw reader.error ?? MovieError(L10n.text("音声波形を取得できません。")) }
     return peaks
+}
+
+// Session-only, bounded cache. Share in-flight reads across timeline switches;
+// a cancelled view must not throw away work another view will shortly request.
+actor WaveformCache {
+    static let shared = WaveformCache()
+    private var values: [Data: [Float]] = [:]
+    private var order: [Data] = []
+    private var tasks: [Data: Task<Void, Never>] = [:]
+    private var failures: [Data: Error] = [:]
+    private(set) var calculations = 0
+
+    private struct Fingerprint: Codable {
+        let id: UUID
+        let path: String
+        let frames: Int
+        let image: Bool
+        let size: Int?
+        let modified: Date?
+    }
+    private struct Key: Codable {
+        let timeline: Timeline
+        let sources: [Fingerprint]
+    }
+
+    private func cacheKey(_ timeline: Timeline, sources: [Source]) throws -> Data {
+        var audio = timeline
+        audio.name = ""
+        audio.output = OutputSettings()
+        audio.outputOrigin = nil
+        audio.showWaveform = nil
+        audio.clips = audio.clips.map { clip in
+            var clip = clip; clip.colorCorrection = nil; clip.canvasFill = nil; return clip
+        }
+        // Keep total duration for the waveform axis, but omit silent visual edits.
+        audio.layers = timeline.layers.filter { $0.kind == .video }.map { layer in
+            var layer = layer
+            layer.region = CanvasRegion(x: 0, y: 0, width: 1, height: 1)
+            return layer
+        }
+        let used = Set(audio.clips.map(\.sourceID) + audio.layers.compactMap(\.sourceID))
+        let fingerprints = sources.filter { used.contains($0.id) }.map { source in
+            let attributes = try? source.url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            return Fingerprint(id: source.id, path: source.path, frames: source.frames, image: source.isImage,
+                               size: attributes?.fileSize, modified: attributes?.contentModificationDate)
+        }
+        // Include silent layer duration without including its geometry or text.
+        if let end = timeline.layers.map(\.end).max(), end > (audio.layers.map(\.end).max() ?? 0) {
+            audio.layers.append(VisualLayer(kind: .rectangle, start: end - 1, end: end,
+                                           region: CanvasRegion(x: 0, y: 0, width: 1, height: 1)))
+            audio.layers[audio.layers.count - 1].id = UUID(uuid: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
+        }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(Key(timeline: audio, sources: fingerprints))
+    }
+
+    func cachedSamples(_ timeline: Timeline, sources: [Source]) throws -> [Float]? {
+        let key = try cacheKey(timeline, sources: sources)
+        if let peaks = values[key] { touch(key); return peaks }
+        return nil
+    }
+
+    func samples(_ timeline: Timeline, sources: [Source]) async throws -> [Float] {
+        try Task.checkCancellation()
+        let key = try cacheKey(timeline, sources: sources)
+        if let value = values[key] { touch(key); return value }
+        if tasks[key] == nil {
+            failures[key] = nil
+            calculations += 1
+            tasks[key] = Task.detached(priority: .utility) {
+                do {
+                    let peaks = try await calculateWaveform(timeline, sources: sources)
+                    await self.finish(key, result: .success(peaks))
+                } catch { await self.finish(key, result: .failure(error)) }
+            }
+        }
+        while tasks[key] != nil { try await Task.sleep(for: .milliseconds(25)) }
+        try Task.checkCancellation()
+        if let value = values[key] { touch(key); return value }
+        throw failures[key] ?? CancellationError()
+    }
+
+    private func touch(_ key: Data) {
+        order.removeAll { $0 == key }; order.append(key)
+    }
+    private func finish(_ key: Data, result: Result<[Float], Error>) {
+        tasks[key] = nil
+        switch result {
+        case .success(let peaks):
+            values[key] = peaks; touch(key)
+            while order.count > 48 { values[order.removeFirst()] = nil }
+        case .failure(let error):
+            failures[key] = error
+            // Failed requests are retried on the next call.
+            if failures.count > 48 { failures.removeAll(); failures[key] = error }
+        }
+    }
 }

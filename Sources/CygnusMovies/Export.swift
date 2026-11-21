@@ -27,6 +27,7 @@ func exportMovie(
     progress: @Sendable (Double) async -> Void
 ) async throws {
     let edit = try await compose(timeline, sources: sources)
+    try await edit.validate()
     if useHardware {
         do {
             try await writeMovie(edit, output: timeline.output, to: destination, mode: .hardware,
@@ -50,6 +51,7 @@ private func writeMovie(
     let temporary = destination.deletingLastPathComponent().appendingPathComponent(".cygnus-\(UUID().uuidString)")
         .appendingPathExtension(output.container.rawValue)
     let reader = try AVAssetReader(asset: edit.asset)
+    reader.timeRange = CMTimeRange(start: .zero, duration: frameTime(edit.frames))
     let writer = try AVAssetWriter(outputURL: temporary, fileType: output.container.fileType)
     defer {
         if reader.status == .reading { reader.cancelReading() }

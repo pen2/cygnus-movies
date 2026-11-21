@@ -359,3 +359,7 @@
 
 "動画レイヤーを追加" = "Add Video Layer";
 "一時素材と、それを使うクリップ・画像／動画レイヤーは保存対象から外れます。書き出した動画には含まれます。" = "Temporary media and its clips, image layers and video layers are excluded from the saved project. They are included in exported movies.";
+
+"映像の編集区間に不整合があるため、処理できません。" = "The video edit ranges are inconsistent and cannot be processed.";
+"シークと波形キャッシュ" = "Seeking and Waveform Cache";
+"再生中にタイムルーラーで位置を変更すると、その位置から再生を続けます。停止中は停止状態を保ちます。音声波形はアプリ終了まで一時キャッシュされ、タイムラインの切り替えや波形表示のオン・オフで再利用します。音量やトリミングなど音声に関わる編集と、元ファイルの変更時は再計算します。" = "Seeking on the time ruler during playback continues playback from that position. When paused, it stays paused. Waveforms are cached until the app quits and reused when switching timelines or toggling waveform display. Audio changes such as volume and trimming, and changes to source files, trigger recalculation.";

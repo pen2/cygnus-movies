@@ -155,6 +155,8 @@ final class Editor: ObservableObject {
             } catch { self.error = error.localizedDescription }
         }
     }
+    private var seekGeneration = UUID()
+    private var seekingWhilePlaying = false
     private var observer: Any?
     private var previewEndObserver: AnyCancellable?
     private var exportTask: Task<Void, Never>?
@@ -171,7 +173,7 @@ final class Editor: ObservableObject {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if self.player.rate != 0 { self.updatePreviewPosition(at: time) }
-                self.playing = self.player.rate != 0
+                if !self.seekingWhilePlaying { self.playing = self.player.rate != 0 }
             }
         }
     }
@@ -786,18 +788,29 @@ final class Editor: ObservableObject {
         }
     }
 
-    func seek(_ frame: Int) {
-        player.pause()
-        playing = false
+    func seek(_ frame: Int, continuingPlayback: Bool = false) {
+        let resume = continuingPlayback && playing && frame < totalFrames
+        let generation = UUID()
+        seekGeneration = generation
+        seekingWhilePlaying = resume
+        if !resume { player.pause(); playing = false }
         playhead = min(totalFrames, max(0, frame))
         // The end marker is a boundary. The final displayed sample is one output frame earlier.
         previewFrame = min(playhead * (previewFPS / 30), max(0, previewFrameCount - 1))
         let time = CMTime(value: Int64(previewFrame), timescale: Int32(previewFPS))
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            Task { @MainActor in
+                guard let self, self.seekGeneration == generation else { return }
+                self.seekingWhilePlaying = false
+                if finished && resume && self.playing { self.player.play() }
+            }
+        }
     }
 
     func stepFrame(_ delta: Int) {
         guard previewFrameCount > 0 else { return }
+        seekGeneration = UUID()
+        seekingWhilePlaying = false
         player.pause()
         playing = false
         previewFrame = min(max(0, previewFrame + delta), previewFrameCount - 1)
@@ -808,14 +821,17 @@ final class Editor: ObservableObject {
 
     func togglePlayback() {
         guard player.currentItem != nil else { return }
-        if player.rate == 0 {
+        if !playing {
             if playhead >= totalFrames { seek(0) }
+            playing = true
             player.play()
         } else {
+            seekGeneration = UUID()
+            seekingWhilePlaying = false
+            playing = false
             player.pause()
             updatePreviewPosition(at: player.currentTime())
         }
-        playing = player.rate != 0
     }
 
     private func updatePreviewPosition(at time: CMTime) {
@@ -895,6 +911,7 @@ final class Editor: ObservableObject {
         do {
             try await Task.sleep(for: .milliseconds(100))
             let edit = try await compose(sequence, sources: sources, layerPreview: layerPreview)
+            try await edit.validate()
             try Task.checkCancellation()
             clearCommittedLayerPreview()
             replacePreviewItem(with: edit.playerItem())

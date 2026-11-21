@@ -30,6 +30,7 @@ struct TimelineTrack: View {
     private struct WaveformRequest: Equatable {
         let timelineID: UUID
         let clips: [Clip]
+        let videoLayers: [VisualLayer]
         let sources: [Source]
         let frames: Int
     }
@@ -37,8 +38,8 @@ struct TimelineTrack: View {
     var body: some View {
         let _ = language
 
-        let request = showWaveform && !editor.timeline.clips.isEmpty
-            ? WaveformRequest(timelineID: editor.timeline.id, clips: editor.timeline.clips, sources: editor.project.sources,
+        let request = showWaveform && editor.timeline.hasContent
+            ? WaveformRequest(timelineID: editor.timeline.id, clips: editor.timeline.clips, videoLayers: editor.timeline.layers.filter { $0.kind == .video }, sources: editor.project.sources,
                               frames: editor.totalFrames)
             : nil
         GeometryReader { geometry in
@@ -108,6 +109,11 @@ struct TimelineTrack: View {
             guard let request else { return }
             let timeline = editor.timeline
             do {
+                if let cached = try await WaveformCache.shared.cachedSamples(timeline, sources: request.sources) {
+                    try Task.checkCancellation()
+                    peaks = cached
+                    return
+                }
                 try await Task.sleep(for: .milliseconds(250))
                 let data = try await waveform(timeline, sources: request.sources)
                 try Task.checkCancellation()
@@ -144,7 +150,7 @@ struct TimelineTrack: View {
         .background(.white.opacity(0.035))
         .contentShape(Rectangle())
         .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-            editor.seek(Int(((value.location.x - inset) * 30 / pointsPerSecond).rounded()))
+            editor.seek(Int(((value.location.x - inset) * 30 / pointsPerSecond).rounded()), continuingPlayback: true)
         })
         .accessibilityLabel(L10n.text("タイムルーラー"))
         .accessibilityValue(timecode(editor.playhead))
