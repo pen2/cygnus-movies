@@ -19,10 +19,10 @@ else
     swift build -c release "$@"
     binary_dir=$(swift build -c release --show-bin-path "$@")
 fi
-app="$PWD/dist/cygnus movies.app"
+app="$PWD/dist/Cygnus Movies.app"
 mkdir -p "$PWD/dist"
 staging=$(mktemp -d "$PWD/dist/.build-app.XXXXXX")
-bundle="$staging/cygnus movies.app"
+bundle="$staging/Cygnus Movies.app"
 previous="$staging/previous.app"
 cleanup() {
     if [[ -e "$previous" && ! -e "$app" ]]; then

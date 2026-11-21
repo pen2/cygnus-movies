@@ -17,8 +17,8 @@
 "MOV、MP4、または対応する画像を選択してください。" = "Choose a MOV, MP4, or supported image file.";
 "MOVまたはMP4、30または60 fps、SDRまたはHDRを選べます。HDRはHEVC 10-bitのHLGです。音声はAACと音声なしを選べ、MOVではApple LosslessとリニアPCMも選べます。音声波形はスイッチで表示し、音量と無音化はクリップごとに設定します。複数タイムラインはまとめて書き出せます。" = "Export MOV or MP4 at 30 or 60 fps in SDR or HDR. HDR uses 10-bit HEVC / HLG. Choose AAC or no audio. MOV also supports Apple Lossless and Linear PCM. Toggle the waveform in the timeline and set volume or mute for each clip. You can export multiple timelines together.";
 "Shiftを押しながらクリップやレイヤーをクリックして選択に追加・解除します。選択した項目はまとめてドラッグしたり、Deleteで削除したりできます。他のタイムラインへは、右クリックメニューで移動先・複製先を選ぶか、項目をタイムラインのタブへドロップします。Optionを押しながらタブへドロップすると複製します。" = "Shift-click clips and layers to add or remove them from the selection. Drag selected items together or press Delete to remove them. Move or duplicate items using the context menu or by dropping them on another timeline tab. Hold Option while dropping to duplicate.";
-"cygnus movies ヘルプ" = "cygnus movies Help";
-"cygnus moviesについて" = "About cygnus movies";
+"Cygnus Movies ヘルプ" = "Cygnus Movies Help";
+"Cygnus Moviesについて" = "About Cygnus Movies";
 "「%@」が重複しています。別の名前を指定してください。" = "“%@” already exists. Enter a different name.";
 "「%@」のファイル名を確認してください。" = "Check the filename for “%@”.";
 "「%@」をプロジェクトから削除します。" = "Remove “%@” from the project.";
@@ -251,10 +251,10 @@
 "表示" = "View";
 "ウインドウ" = "Window";
 "ヘルプ" = "Help";
-"cygnus moviesを隠す" = "Hide cygnus movies";
+"Cygnus Moviesを隠す" = "Hide Cygnus Movies";
 "ほかを隠す" = "Hide Others";
 "すべてを表示" = "Show All";
-"cygnus moviesを終了" = "Quit cygnus movies";
+"Cygnus Moviesを終了" = "Quit Cygnus Movies";
 "最小化" = "Minimize";
 "カット" = "Cut";
 "コピー" = "Copy";
@@ -363,3 +363,7 @@
 "映像の編集区間に不整合があるため、処理できません。" = "The video edit ranges are inconsistent and cannot be processed.";
 "シークと波形キャッシュ" = "Seeking and Waveform Cache";
 "再生中にタイムルーラーで位置を変更すると、その位置から再生を続けます。停止中は停止状態を保ちます。音声波形はアプリ終了まで一時キャッシュされ、タイムラインの切り替えや波形表示のオン・オフで再利用します。音量やトリミングなど音声に関わる編集と、元ファイルの変更時は再計算します。" = "Seeking on the time ruler during playback continues playback from that position. When paused, it stays paused. Waveforms are cached until the app quits and reused when switching timelines or toggling waveform display. Audio changes such as volume and trimming, and changes to source files, trigger recalculation.";
+
+"処理が完了するか中止してから、ウインドウを閉じてください。" = "Wait for processing to finish or cancel it before closing this window.";
+"プロジェクトのドロップと複数ウインドウ" = "Project Drops and Multiple Windows";
+".cygnusmoviesをウインドウへドロップするとプロジェクトを開きます。編集中の場合は新しいウインドウで開き、元の編集内容は保持します。同じプロジェクトは既存のウインドウを表示します。保存・取り消し・再生などのメニューは操作中のウインドウに適用されます。ウインドウを閉じる際は、そのプロジェクトの未保存の変更を確認します。" = "Drop a .cygnusmovies file onto a window to open it. If a project is already in use, it opens in a new window and preserves the original edits. Opening the same project shows its existing window. Save, Undo, Playback and other menus apply to the active window. Closing a window checks that project's unsaved changes.";

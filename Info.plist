@@ -5,14 +5,14 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>ja</string>
 	<key>CFBundleDisplayName</key>
-	<string>cygnus movies</string>
+	<string>Cygnus Movies</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleTypeIconFile</key>
 			<string>AppIcon.icns</string>
 			<key>CFBundleTypeName</key>
-			<string>cygnus movies プロジェクト</string>
+			<string>Cygnus Movies プロジェクト</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
@@ -60,13 +60,13 @@
 		<string>en</string>
 	</array>
 	<key>CFBundleName</key>
-	<string>cygnus movies</string>
+	<string>Cygnus Movies</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.9.1</string>
+	<string>1.10.0</string>
 	<key>CFBundleVersion</key>
-	<string>33</string>
+	<string>34</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
@@ -81,7 +81,7 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>cygnus movies プロジェクト</string>
+			<string>Cygnus Movies プロジェクト</string>
 			<key>UTTypeIconFile</key>
 			<string>AppIcon.icns</string>
 			<key>UTTypeIdentifier</key>
@@ -100,7 +100,7 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>cygnus movies timeline item</string>
+			<string>Cygnus Movies timeline item</string>
 			<key>UTTypeIdentifier</key>
 			<string>local.cygnus-movies.timeline-drag</string>
 		</dict>

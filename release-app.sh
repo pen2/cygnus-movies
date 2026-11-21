@@ -22,9 +22,9 @@ if [[ -z "${NOTARY_PROFILE:-}" ]]; then
 fi
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
-app="$PWD/dist/cygnus movies.app"
+app="$PWD/dist/Cygnus Movies.app"
 if [[ ! -d "$app" ]]; then
-    print -u2 'Build dist/cygnus movies.app with ./build-app.sh first.'
+    print -u2 'Build dist/Cygnus Movies.app with ./build-app.sh first.'
     exit 1
 fi
 if ! /usr/bin/security find-identity -v -p codesigning | /usr/bin/grep -Fq "\"$SIGNING_IDENTITY\""; then
@@ -46,7 +46,7 @@ name="cygnus-movies-${version}-macOS-${platform}"
 logdir="$PWD/dist/notarization/${version}-${build}-$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$logdir"
 staging=$(mktemp -d "$PWD/dist/.release-app.XXXXXX")
-bundle="$staging/cygnus movies.app"
+bundle="$staging/Cygnus Movies.app"
 previous="$staging/previous.app"
 cleanup() {
     if [[ -e "$previous" && ! -e "$app" ]]; then
@@ -94,9 +94,9 @@ xcrun stapler validate "$bundle"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$bundle" "$staging/$name.zip"
 mkdir "$staging/check"
 /usr/bin/ditto -x -k "$staging/$name.zip" "$staging/check"
-xcrun stapler validate "$staging/check/cygnus movies.app"
-/usr/bin/codesign --verify --deep --strict "$staging/check/cygnus movies.app"
-/usr/sbin/spctl --assess --type execute --verbose=2 "$staging/check/cygnus movies.app"
+xcrun stapler validate "$staging/check/Cygnus Movies.app"
+/usr/bin/codesign --verify --deep --strict "$staging/check/Cygnus Movies.app"
+/usr/sbin/spctl --assess --type execute --verbose=2 "$staging/check/Cygnus Movies.app"
 
 mv "$app" "$previous"
 mv "$bundle" "$app"

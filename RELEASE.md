@@ -37,7 +37,7 @@ Appleへ公証を申請します。承認後に公証チケットをアプリへ
 
 ## 成果物
 
-- `dist/cygnus movies.app`：正式署名・公証チケット添付済みアプリ
+- `dist/Cygnus Movies.app`：正式署名・公証チケット添付済みアプリ
 - `dist/cygnus-movies-<バージョン>-macOS-<CPU>.zip`：ダウンロード用ZIP
 - 同名の `.zip.sha256`：ZIPのチェックサム
 - `dist/notarization/`：Appleの審査結果、署名情報、Gatekeeper検証結果

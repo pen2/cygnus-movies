@@ -36,8 +36,8 @@ enum L10n {
         let headers = ["ファイル": "ファイル", "File": "ファイル", "編集": "編集", "Edit": "編集",
                        "表示": "表示", "View": "表示", "ウインドウ": "ウインドウ", "Window": "ウインドウ",
                        "ヘルプ": "ヘルプ", "Help": "ヘルプ"]
-        let actions = ["hide:": "cygnus moviesを隠す", "hideOtherApplications:": "ほかを隠す",
-                       "unhideAllApplications:": "すべてを表示", "terminate:": "cygnus moviesを終了",
+        let actions = ["hide:": "Cygnus Moviesを隠す", "hideOtherApplications:": "ほかを隠す",
+                       "unhideAllApplications:": "すべてを表示", "terminate:": "Cygnus Moviesを終了",
                        "performClose:": "閉じる", "performMiniaturize:": "最小化",
                        "cut:": "カット", "copy:": "コピー", "paste:": "ペースト",
                        "pasteAsPlainText:": "標準のスタイルでペースト", "selectAll:": "すべてを選択"]

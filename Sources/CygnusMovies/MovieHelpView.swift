@@ -20,6 +20,7 @@ struct MovieHelpView: View {
         (L10n.text("切り替え効果"), L10n.text("クリップの「次への切替」と、レイヤーの「開始時の効果」「終了時の効果」で、クロスディゾルブ、左からスワイプ、右からスワイプを選べます。効果は最長0.3秒です。")),
         (L10n.text("画面比率と余白"), L10n.text("タイムライン設定で16:9、9:16、1:1を選びます。正方形の解像度は1080×1080または2160×2160です。素材と画面の比率が異なる場合は、クリップ設定で黒埋めか拡大ぼかしを選びます。")),
         (L10n.text("書き出しと音声"), L10n.text("MOVまたはMP4、30または60 fps、SDRまたはHDRを選べます。HDRはHEVC 10-bitのHLGです。音声はAACと音声なしを選べ、MOVではApple LosslessとリニアPCMも選べます。音声波形はスイッチで表示し、音量と無音化はクリップごとに設定します。複数タイムラインはまとめて書き出せます。")),
+        (L10n.text("プロジェクトのドロップと複数ウインドウ"), L10n.text(".cygnusmoviesをウインドウへドロップするとプロジェクトを開きます。編集中の場合は新しいウインドウで開き、元の編集内容は保持します。同じプロジェクトは既存のウインドウを表示します。保存・取り消し・再生などのメニューは操作中のウインドウに適用されます。ウインドウを閉じる際は、そのプロジェクトの未保存の変更を確認します。")),
         (L10n.text("Finderから開く"), L10n.text("「ファイル」→「プロジェクトファイルを関連付け…」を選ぶと、.cygnusmoviesをダブルクリックで開くアプリに設定できます。macOSが確認を求めた場合は許可してください。"))
     ] }
 
@@ -28,7 +29,7 @@ struct MovieHelpView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 17) {
-                Text(L10n.text("cygnus movies ヘルプ")).font(.largeTitle.bold())
+                Text(L10n.text("Cygnus Movies ヘルプ")).font(.largeTitle.bold())
                 ForEach(topics.indices, id: \.self) { index in
                     VStack(alignment: .leading, spacing: 5) {
                         Text(topics[index].0).font(.headline)

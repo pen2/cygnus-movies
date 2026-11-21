@@ -57,7 +57,7 @@ struct WindowTitleBridge: NSViewRepresentable {
     func makeNSView(context: Context) -> TitleView { TitleView() }
     func updateNSView(_ view: TitleView, context: Context) { view.title = title; view.window?.title = title }
     final class TitleView: NSView {
-        var title = "cygnus movies"
+        var title = "Cygnus Movies"
         override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); window?.title = title }
     }
 }

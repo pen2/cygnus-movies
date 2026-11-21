@@ -80,7 +80,7 @@ import AVFoundation
         editor.jobs[1].status = .complete
         precondition(editor.overallExportProgress == 1)
         editor.exporting = false
-        precondition(editor.windowTitle == "cygnus movies")
+        precondition(editor.windowTitle == "Cygnus Movies")
         editor.jobs = []
         precondition(editor.overallExportProgress == 0)
         print("PASS weighted batch progress, completion, failure, empty queue and title reset")

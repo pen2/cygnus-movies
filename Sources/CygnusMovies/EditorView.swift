@@ -11,6 +11,7 @@ struct EditorView: View {
     @AppStorage(AppLanguage.preferenceKey) private var language = AppLanguage.system
 
     @ObservedObject var editor: Editor
+    var openFiles: (([URL]) -> Void)? = nil
     @State private var removeTimeline = false
     @State private var timelineRemovalTarget: Timeline?
     @AppStorage(TimelinePreferences.zoom) private var zoom = 0.56
@@ -97,6 +98,7 @@ struct EditorView: View {
             }
         }
         .coordinateSpace(name: TimelineScale.editorSpace)
+        .dropDestination(for: URL.self) { urls, _ in receiveFiles(urls) }
         .background(EditorShortcuts(editor: editor).frame(width: 0, height: 0))
         .background(WindowTitleBridge(title: editor.windowTitle).frame(width: 0, height: 0))
         .onChange(of: editor.selection) { selection in
@@ -115,7 +117,7 @@ struct EditorView: View {
                                  fps: editor.timeline.output.fps, color: editor.timeline.output.colorMode, sources: editor.project.sources)) {
             await editor.rebuildPreview()
         }
-        .alert("cygnus movies", isPresented: Binding(get: { editor.error != nil }, set: { if !$0 { editor.error = nil } })) {
+        .alert("Cygnus Movies", isPresented: Binding(get: { editor.error != nil }, set: { if !$0 { editor.error = nil } })) {
             Button(L10n.text("閉じる"), role: .cancel) {}
         } message: {
             Text(editor.error ?? "")
@@ -265,9 +267,15 @@ struct EditorView: View {
         .frame(maxHeight: .infinity)
         .background(surface)
         .dropDestination(for: URL.self) { urls, _ in
-            editor.importSources(urls.filter(\.isFileURL))
-            return urls.contains(where: \.isFileURL)
+            receiveFiles(urls)
         }
+    }
+
+    private func receiveFiles(_ urls: [URL]) -> Bool {
+        let files = urls.filter(\.isFileURL)
+        guard !files.isEmpty else { return false }
+        if let openFiles { openFiles(files) } else { editor.importSources(files) }
+        return true
     }
 
     private func sourceRow(_ source: Source) -> some View {

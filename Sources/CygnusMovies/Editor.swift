@@ -113,7 +113,8 @@ final class Editor: ObservableObject {
     }
     var completedExportCount: Int { jobs.filter { if case .complete = $0.status { return true }; return false }.count }
     var windowTitle: String {
-        exporting ? "cygnus movies — \(L10n.text("書き出し")) \(Int(overallExportProgress * 100))%" : "cygnus movies"
+        let title = projectName.map { "\($0) — Cygnus Movies" } ?? "Cygnus Movies"
+        return exporting ? "\(title) — \(L10n.text("書き出し")) \(Int(overallExportProgress * 100))%" : title
     }
 
     private func timelineFrames(_ timeline: Timeline) -> Int {
@@ -255,6 +256,7 @@ final class Editor: ObservableObject {
     }
 
     var dirty: Bool { saved != project }
+    var hasOpenProject: Bool { projectURL != nil || dirty || loadingSources || exporting }
 
     func updateTimeline(_ change: (inout Timeline) -> Void) {
         edit { change(&project.timelines[timelineIndex]) }
@@ -1127,6 +1129,7 @@ final class Editor: ObservableObject {
         guard dirty else { return true }
         let alert = NSAlert()
         alert.messageText = L10n.text("プロジェクトの変更を保存しますか？")
+        alert.informativeText = projectName ?? L10n.text("名称未設定")
         alert.addButton(withTitle: L10n.text("保存"))
         alert.addButton(withTitle: L10n.text("キャンセル"))
         alert.addButton(withTitle: L10n.text("保存しない")).hasDestructiveAction = true
