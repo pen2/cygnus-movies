@@ -9,6 +9,7 @@ public struct EffectParameters: Codable, Equatable {
 
 public protocol MovieEffects {
     var shapes: [(id: String, title: String)] { get }
+    func symbol(for shape: String) -> String
     func title(for shape: String) -> String
     @MainActor func clipInspector(parameters: Binding<EffectParameters?>, transition: Binding<String>, frames: Binding<Int>, maximum: Int, video: Bool) -> AnyView
     @MainActor func shapeInspector(parameters: Binding<EffectParameters?>, shape: Binding<String?>) -> AnyView
@@ -61,6 +62,7 @@ public protocol AudioEditing {
     @MainActor func clipInspector(sources: [Source], separated: Bool, select: @escaping (Source?) -> Void) -> AnyView
     func sourceFrames(_ url: URL) async throws -> Int?
     func insert(_ segment: AudioSegment, url: URL, start: Int, length: Int, gain: Float, composition: AVMutableComposition) async throws -> AVMutableAudioMixInputParameters?
+    @MainActor func monitorVolume(player: AVPlayer) -> AnyView
     @MainActor func controls(beginPlayback: @escaping () -> Void, stopPlayback: @escaping () -> Void, register: @escaping (URL) -> Void) -> AnyView
 }
 

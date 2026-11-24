@@ -416,6 +416,7 @@ struct EditorView: View {
                     }
                     .help(L10n.text("画像をコピー"))
                     .disabled(editor.copyingFrame)
+                    if let audio = MovieExtensions.audio { audio.monitorVolume(player: editor.player) }
                     FrameShareButton(editor: editor).frame(width: 30, height: 28).editorHoverBrightness()
                 }
                 .padding(.horizontal, 6)
@@ -713,11 +714,13 @@ struct EditorView: View {
                             }
                         }
                         if let effects = MovieExtensions.effects {
-                            Menu(L10n.text("シェイプ")) {
+                            Menu {
                                 ForEach(effects.shapes, id: \.id) { shape in
-                                    Button(shape.title) { editor.addLayer(.rectangle, duration: defaultLayerFrames(viewportWidth), artworkID: shape.id == "rectangle" ? nil : shape.id) }
+                                    Button { editor.addLayer(.rectangle, duration: defaultLayerFrames(viewportWidth), artworkID: shape.id == "rectangle" ? nil : shape.id) } label: {
+                                        Label(shape.title, systemImage: effects.symbol(for: shape.id))
+                                    }
                                 }
-                            }
+                            } label: { Label(L10n.text("シェイプ"), systemImage: "square.on.circle") }
                         }
                         Menu {
                             ForEach(editor.librarySources.filter(\.isImage)) { source in
