@@ -16,6 +16,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var processingOpenRequests = false
     private var helpWindow: NSWindow?
 
+    private var checkedRecovery = false
+    func offerRecovery() {
+        guard !checkedRecovery else { return }
+        checkedRecovery = true
+        Edition.documents?.offerRecovery { id, document in
+            let recovered = Editor(recoveryID: id)
+            recovered.restore(document)
+            let session = ProjectSession(id: UUID(), editor: recovered)
+            register(session)
+            presentWindow?(session.id)
+        }
+    }
+
     func showHelp() {
         if let helpWindow {
             helpWindow.title = L10n.text("Cygnus Movies ヘルプ")
@@ -64,12 +77,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     func register(_ session: ProjectSession, window: NSWindow? = nil) {
         sessions[session.id] = session
-        if let window { windows[session.id] = window }
+        if let window {
+            windows[session.id] = window
+            session.editor.showExportWindow = { [weak window] in window?.makeKeyAndOrderFront(nil) }
+        }
     }
 
     func closed(_ session: ProjectSession) {
         session.editor.player.pause()
         session.editor.player.replaceCurrentItem(with: nil)
+        Edition.documents?.forget(session.editor.recoveryID)
         session.editor.temporaryMedia.cleanup()
         sessions[session.id] = nil
         windows[session.id] = nil
@@ -193,7 +210,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        allEditors.forEach { $0.temporaryMedia.cleanup() }
+        allEditors.forEach { Edition.documents?.forget($0.recoveryID); $0.temporaryMedia.cleanup() }
         AudioPreparationCache.shared.removeTemporaryFiles()
     }
 }

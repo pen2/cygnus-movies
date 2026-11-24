@@ -11,6 +11,6 @@ ffmpeg -v error -f lavfi -i color=c=blue:s=160x90:r=30000/1001:d=1185 \
 arch=$(/usr/bin/uname -m)
 xcrun swiftc -swift-version 5 -parse-as-library -O -target "$arch-apple-macosx13.0" \
     -module-cache-path .build/clang-cache \
-    Sources/CygnusMovies/{Project,Editor,Export,Media,AudioPreparation,VisualLayer,LayerRendering,Compositor,Localization,TimelineInteraction,TemporaryMedia,PreviewActions}.swift \
+    Sources/CygnusMovies/{EditionFeatures,Project,Editor,Export,Media,AudioPreparation,VisualLayer,LayerRendering,Compositor,Localization,TimelineInteraction,TemporaryMedia,PreviewActions}.swift \
     Tests/SeekWaveformTimingCheck.swift -o "$folder/check"
 "$folder/check" "$folder"

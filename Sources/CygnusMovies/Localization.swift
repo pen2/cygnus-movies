@@ -43,7 +43,7 @@ enum L10n {
                        "pasteAsPlainText:": "標準のスタイルでペースト", "selectAll:": "すべてを選択"]
         func updateActions(_ menu: NSMenu) {
             for item in menu.items {
-                if let action = item.action, let key = actions[NSStringFromSelector(action)] { item.title = text(key) }
+                if let action = item.action, let key = actions[NSStringFromSelector(action)] { item.title = text(key).replacingOccurrences(of: "Cygnus Movies", with: Edition.name) }
                 if let submenu = item.submenu { updateActions(submenu) }
             }
         }

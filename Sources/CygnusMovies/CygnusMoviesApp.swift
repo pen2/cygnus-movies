@@ -1,12 +1,13 @@
 import AppKit
 import SwiftUI
 
-@main
-struct CygnusMoviesApp: App {
+public struct CygnusMoviesApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
-    var body: some Scene {
-        WindowGroup("Cygnus Movies", id: "editor", for: UUID.self) { $id in
+    public init() {}
+
+    public var body: some Scene {
+        WindowGroup(Text(verbatim: Edition.name), id: "editor", for: UUID.self) { $id in
             ProjectWindow(session: delegate.session(for: id), delegate: delegate)
         }
         .defaultSize(width: 1250, height: 825)
@@ -36,10 +37,15 @@ private struct GlobalCommands: Commands {
     @AppStorage(AppLanguage.preferenceKey) private var language = AppLanguage.system
     var body: some Commands {
             CommandGroup(replacing: .appInfo) {
-                Button(L10n.text("Cygnus Moviesについて"), action: delegate.showAbout)
+                Button(L10n.text("Cygnus Moviesについて").replacingOccurrences(of:"Cygnus Movies", with:Edition.name), action: delegate.showAbout)
             }
             CommandGroup(replacing: .help) {
                 Button(L10n.text("Cygnus Movies ヘルプ"), action: delegate.showHelp)
+                if Edition.documents == nil {
+                    Button(L10n.text("最新版をダウンロードする", language: language)) {
+                        NSWorkspace.shared.open(URL(string: "https://github.com/pen2/cygnus-movies")!)
+                    }
+                }
             }
             CommandMenu(L10n.text("言語", language: language)) {
                 Picker(L10n.text("表示言語", language: language), selection: $language) {
@@ -123,6 +129,7 @@ private struct ProjectWindow: View {
             delegate.presentWindow = { id in openWindow(id: "editor", value: id) }
             delegate.register(session)
             delegate.editor = session.editor
+            DispatchQueue.main.async { delegate.offerRecovery() }
             DispatchQueue.main.async { L10n.updateMenuTitles() }
         }
         .onChange(of: language) { _ in

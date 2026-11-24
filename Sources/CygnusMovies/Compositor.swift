@@ -30,6 +30,8 @@ final class PictureInstruction: NSObject, AVVideoCompositionInstructionProtocol,
         var still: CGImage?
         var fillStill = false
         var blank = false
+        var parameters: EffectParameters?
+        var outgoingEffect: String?
         var correction: ClipColorCorrection?
     }
 
@@ -118,8 +120,9 @@ class MovieCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
                         .applyingGaussianBlur(sigma: min(bounds.width, bounds.height) * 0.028)
                         .cropped(to: bounds)
                 }
-                return frame.transformed(by: sourceFlip.concatenating(layer.transform).concatenating(canvasFlip))
-                    .composited(over: background).cropped(to: bounds)
+                var foreground = frame.transformed(by: sourceFlip.concatenating(layer.transform).concatenating(canvasFlip))
+                if let parameters = layer.parameters, let effects = MovieExtensions.effects { foreground = effects.foreground(foreground, parameters: parameters, canvas: bounds) }
+                return foreground.composited(over: background).cropped(to: bounds)
             }
 
             let elapsed = (request.compositionTime - instruction.animationRange.start).seconds
@@ -128,7 +131,9 @@ class MovieCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
             let result: CIImage
             if let previous = instruction.previous, let outgoing = fitted(previous), let incoming {
                 let fraction = min(1, max(0, elapsed / duration))
-                if instruction.transition == .swipe || instruction.transition == .swipeRight {
+                if let id = previous.outgoingEffect, let custom = MovieExtensions.effects?.transition(id, from: outgoing, to: incoming, progress: fraction, bounds: bounds) {
+                    result = custom
+                } else if instruction.transition == .swipe || instruction.transition == .swipeRight {
                     let width = bounds.width * (instruction.transition == .swipeRight ? -1 : 1)
                     result = incoming.transformed(by: .init(translationX: (fraction - 1) * width, y: 0))
                         .composited(over: outgoing.transformed(by: .init(translationX: fraction * width, y: 0)))

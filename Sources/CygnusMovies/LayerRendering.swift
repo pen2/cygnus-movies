@@ -17,7 +17,11 @@ struct RenderedVisualLayer {
         self.videoTrackID = videoTrackID
         self.videoTransform = videoTransform
         range = CMTimeRange(start: frameTime(layer.start), duration: frameTime(layer.end - layer.start))
-        if layer.kind == .text {
+        if let shape = layer.artworkID, let effects = MovieExtensions.effects {
+            let color = layer.rectangleColor ?? .rectangleDefault
+            let fill = CGColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: layer.rectangleOpacity ?? 1)
+            artwork = effects.artwork(shape: shape, parameters: layer.effectParameters, size: layer.region.pixels(in: canvas).size, fill: fill).map { CIImage(cgImage: $0) }
+        } else if layer.kind == .text {
             artwork = Self.makeText(layer, canvas: canvas)
         } else {
             artwork = image.map { CIImage(cgImage: $0) }
@@ -52,6 +56,10 @@ struct RenderedVisualLayer {
                                                                      tx: 0, ty: oriented.extent.minY + oriented.extent.maxY))
             result = upright.positioned(in: rect)
         case .rectangle:
+            if layer.artworkID != nil, let artwork {
+                result = artwork.transformed(by: .init(scaleX: rect.width / artwork.extent.width, y: rect.height / artwork.extent.height)).transformed(by: .init(translationX: rect.minX, y: rect.minY))
+                break
+            }
             let color = layer.rectangleColor ?? .rectangleDefault
             let fill = CGColor(srgbRed: color.red, green: color.green, blue: color.blue,
                                alpha: layer.rectangleOpacity ?? 1)

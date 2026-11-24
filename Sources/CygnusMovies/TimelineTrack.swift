@@ -693,9 +693,11 @@ private struct LayerBlock: View {
     private func trimLimits(start: Bool) -> ClosedRange<Int> {
         if layer.kind == .video {
             let sourceFrames = editor.project.sources.first { $0.id == layer.sourceID }?.frames ?? length
-            let offset = layer.videoSourceStart ?? 0
+            let rate = layer.sound?.rate ?? 1
+            let sourceStart = layer.sound?.sourceFrame ?? Double(layer.videoSourceStart ?? 0)
+            let offset = Int(sourceStart / rate)
             return start ? (-min(layer.start, offset))...(length - 1)
-                : (1 - length)...max(0, sourceFrames - offset - length)
+                : (1 - length)...max(0, Int((Double(sourceFrames) - sourceStart) / rate) - length)
         }
         return start ? (-layer.start)...(length - 1) : (1 - length)...(VisualLayer.maximumEnd - layer.end)
     }

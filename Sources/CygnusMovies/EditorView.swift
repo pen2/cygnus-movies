@@ -117,7 +117,7 @@ struct EditorView: View {
                                  fps: editor.timeline.output.fps, color: editor.timeline.output.colorMode, sources: editor.project.sources)) {
             await editor.rebuildPreview()
         }
-        .alert("Cygnus Movies", isPresented: Binding(get: { editor.error != nil }, set: { if !$0 { editor.error = nil } })) {
+        .alert(Edition.name, isPresented: Binding(get: { editor.error != nil }, set: { if !$0 { editor.error = nil } })) {
             Button(L10n.text("閉じる"), role: .cancel) {}
         } message: {
             Text(editor.error ?? "")
@@ -286,12 +286,13 @@ struct EditorView: View {
                 Text(source.name).font(.callout).lineLimit(1).truncationMode(.middle)
                 Text(missing ? L10n.text("見つかりません") : source.isImage ? L10n.text("画像") : timecode(source.frames))
                     .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                if source.managed == true { Text(L10n.text("保存済み")).font(.caption2).foregroundStyle(.secondary) }
                 if source.temporary == true {
-                    Text(L10n.text("一時素材・保存対象外"))
+                    Text(L10n.text(Edition.documents == nil ? "一時素材・保存対象外" : "次回保存時に保存"))
                         .font(.caption2).foregroundStyle(.orange)
                         .padding(.horizontal, 4).padding(.vertical, 2)
                         .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 3))
-                        .help(L10n.text("アプリを終了すると破棄されます"))
+                        .help(L10n.text(Edition.documents == nil ? "アプリを終了すると破棄されます" : "次回保存時に保存"))
                 }
             }
             Spacer(minLength: 0)
@@ -337,6 +338,16 @@ struct EditorView: View {
     private var monitor: some View {
         VStack(spacing: 0) {
             HStack {
+                if let audio = MovieExtensions.audio {
+                    let start = editor.playhead, timeline = editor.timeline.id
+                    audio.controls(beginPlayback: {
+                        editor.seek(start)
+                        if !editor.playing && editor.timeline.hasContent { editor.togglePlayback() }
+                    }, stopPlayback: {
+                        if editor.playing { editor.togglePlayback() }
+                    }, register: { editor.importRecording($0, at: start, timeline: timeline) })
+                    .id(timeline)
+                }
                 Label(L10n.text("プレビュー"), systemImage: "play.rectangle").font(.caption.weight(.semibold)).lineLimit(1)
                 Spacer(minLength: 8)
                 Text("\(Int(editor.timeline.output.size.width)) × \(Int(editor.timeline.output.size.height))")
@@ -362,9 +373,22 @@ struct EditorView: View {
                 }
                 .frame(width: size.width * scale, height: size.height * scale)
                 .overlay {
-                    if let layer = editor.selectedLayer, editor.previewError == nil, editor.timeline.hasContent,
+                    if let layer = editor.selectedLayer, layer.sound == nil, editor.previewError == nil, editor.timeline.hasContent,
                        !editor.playing {
                         LayerRegionGuide(layer: layer, editor: editor).id(layer.id)
+                        if let shape = layer.artworkID, let effects = MovieExtensions.effects {
+                            let canvas = CGSize(width:size.width*scale,height:size.height*scale)
+                            effects.guide(shape:shape, parameters:Binding(get:{ layer.effectParameters },set:{ value in editor.updateLayer(layer.id) { $0.effectParameters = value } }),
+                                          frame:layer.region.pixels(in:canvas), canvas:canvas)
+                        }
+                    } else if !editor.playing, let clip = editor.selectedClip, let effects = MovieExtensions.effects,
+                              let source = editor.project.sources.first(where:{ $0.id == clip.sourceID }), let info = source.videoInfo,
+                              let placement = editor.placements.first(where: { $0.clip.id == clip.id }), (placement.start..<placement.end).contains(editor.playhead) {
+                        let canvas = CGSize(width:size.width*scale,height:size.height*scale)
+                        let factor = min(canvas.width/info.width,canvas.height/info.height)
+                        let w = info.width*factor, h = info.height*factor
+                        effects.guide(shape:nil,parameters:clipBinding(clip, \.effectParameters),
+                                      frame:CGRect(x:(canvas.width-w)/2,y:(canvas.height-h)/2,width:w,height:h),canvas:canvas)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -445,7 +469,7 @@ struct EditorView: View {
     }
 
     private var selectionTabTitle: String {
-        if let layer = editor.selectedLayer { return L10n.format("%@レイヤー", layer.kind.title) }
+        if let layer = editor.selectedLayer { return L10n.format("%@レイヤー", layer.displayKind) }
         return editor.selectedClip == nil ? L10n.text("選択項目") : L10n.text("クリップ")
     }
 
@@ -533,6 +557,12 @@ struct EditorView: View {
                !FileManager.default.fileExists(atPath: source.path) {
                 Button(L10n.text("元ファイルを再指定…")) { editor.relink(source) }.disabled(editor.loadingSources)
             }
+            if let audio = MovieExtensions.audio, editor.project.sources.first(where: { $0.id == clip.sourceID })?.isImage == false {
+                audio.clipInspector(sources: editor.librarySources.filter { $0.audioOnly == true },
+                                    separated: editor.timeline.layers.contains { $0.sound?.originatingClip == clip.id }) {
+                    editor.clipSound(clip, replacement: $0)
+                }
+            }
             Toggle(L10n.text("無音化"), isOn: Binding(get: { editor.selectedClip?.muted == true },
                                            set: { value in editor.updateClip(clip.id) { $0.muted = value ? true : nil } }))
                 .editorHover()
@@ -548,10 +578,22 @@ struct EditorView: View {
             .disabled(clip.muted == true)
             Toggle(L10n.text("フェードイン"), isOn: clipBinding(clip, \.fadeIn)).editorHover()
             Toggle(L10n.text("フェードアウト"), isOn: clipBinding(clip, \.fadeOut)).editorHover()
+            if let effects = MovieExtensions.effects {
+                let i = editor.timeline.clips.firstIndex { $0.id == clip.id } ?? 0
+                let next = editor.timeline.clips.dropFirst(i + 1).first
+                effects.clipInspector(parameters: clipBinding(clip, \.effectParameters), transition: Binding(get: {
+                    clip.customTransition ?? clip.transition.rawValue
+                }, set: { id in editor.updateClip(clip.id) {
+                    $0.customTransition = Transition(rawValue: id) == nil ? id : nil
+                    $0.transition = Transition(rawValue: id) ?? .dissolve
+                } }), frames: Binding(get: { clip.transitionFrames ?? 9 }, set: { n in editor.updateClip(clip.id) { $0.transitionFrames = n == 9 ? nil : n } }),
+                maximum: min(90, clip.length / 3, (next?.length ?? 0) / 3), video: editor.project.sources.first { $0.id == clip.sourceID }?.isImage == false)
+            } else {
             inspectorPicker(L10n.text("次への切替"), selection: clipBinding(clip, \.transition),
                             values: Transition.allCases, title: \.title)
             .disabled(editor.timeline.clips.last?.id == clip.id)
             Text(L10n.text("フェードと切替は最長 0.3 秒")).font(.caption2).foregroundStyle(.secondary)
+            }
             if editor.project.sources.first(where: { $0.id == clip.sourceID })?.isImage == false {
                 Divider().padding(.vertical, 4)
                 HStack {
@@ -665,9 +707,16 @@ struct EditorView: View {
                         moveButton(1)
                     }
                     Menu {
-                        ForEach(LayerKind.allCases.filter { $0 != .image && $0 != .video }, id: \.self) { kind in
+                        ForEach(LayerKind.allCases.filter { $0 != .image && $0 != .video && ($0 != .rectangle || MovieExtensions.effects == nil) }, id: \.self) { kind in
                             Button { addVisibleLayer(kind, viewportWidth: viewportWidth) } label: {
                                 Label { Text(kind.title) } icon: { LayerIcon(kind: kind) }
+                            }
+                        }
+                        if let effects = MovieExtensions.effects {
+                            Menu(L10n.text("シェイプ")) {
+                                ForEach(effects.shapes, id: \.id) { shape in
+                                    Button(shape.title) { editor.addLayer(.rectangle, duration: defaultLayerFrames(viewportWidth), artworkID: shape.id == "rectangle" ? nil : shape.id) }
+                                }
                             }
                         }
                         Menu {
@@ -682,7 +731,7 @@ struct EditorView: View {
                             LayerLabel(kind: .image, title: L10n.text("画像"))
                         }
                         Menu {
-                            ForEach(editor.librarySources.filter { !$0.isImage }) { source in
+                            ForEach(editor.librarySources.filter { !$0.isImage && $0.audioOnly != true }) { source in
                                 Button(source.name) { addVisibleLayer(.video, source: source, viewportWidth: viewportWidth) }
                             }
                             Button(L10n.text("動画ファイルを選ぶ…")) {
@@ -889,6 +938,9 @@ struct EditorView: View {
                     Spacer()
                     Text(editor.overallExportProgress.formatted(.percent.precision(.fractionLength(0))))
                         .monospacedDigit()
+                }
+                if editor.exporting, let controller = MovieExtensions.exports {
+                    Text(controller.estimate(elapsed: Date().timeIntervalSince(editor.exportStart), fraction: editor.overallExportProgress)).font(.caption)
                 }
                 ProgressView(value: editor.overallExportProgress).labelsHidden()
                 Text(L10n.format("完了 %@ / %@ 本", String(editor.completedExportCount), String(editor.jobs.count)))

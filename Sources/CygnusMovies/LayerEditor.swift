@@ -13,7 +13,7 @@ struct LayerInspector: View {
 
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                LayerLabel(kind: layer.kind, title: L10n.format("%@レイヤー", layer.kind.title)).font(.headline).lineLimit(1)
+                LayerLabel(kind: layer.kind, title: L10n.format("%@レイヤー", layer.displayKind)).font(.headline).lineLimit(1)
                 Spacer()
                 Button(action: editor.duplicateLayer) { Label(L10n.text("複製"), systemImage: "plus.square.on.square") }
                     .help(L10n.text("レイヤーを複製"))
@@ -25,6 +25,7 @@ struct LayerInspector: View {
             }
             Text(timecode(layer.start) + "  –  " + timecode(layer.end))
                 .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+            if layer.sound == nil {
             transitionPicker(L10n.text("開始時の効果"), key: \.entrance)
             transitionPicker(L10n.text("終了時の効果"), key: \.exit)
             Divider()
@@ -36,6 +37,7 @@ struct LayerInspector: View {
             HStack(spacing: 10) {
                 field(L10n.text("幅"), value: percent(\.width))
                 field(L10n.text("高さ"), value: percent(\.height))
+            }
             }
             if layer.kind == .text {
                 Text(L10n.text("テキスト")).font(.caption).foregroundStyle(.secondary)
@@ -90,6 +92,9 @@ struct LayerInspector: View {
                 }
                 Toggle(L10n.text("影を付ける"), isOn: binding(\.shadow)).editorHover()
             } else if layer.kind == .rectangle {
+                if let effects = MovieExtensions.effects {
+                    effects.shapeInspector(parameters: binding(\.effectParameters), shape: binding(\.artworkID))
+                }
                 colorPicker(L10n.text("塗りつぶし色"), key: \.rectangleColor, defaultColor: .rectangleDefault)
                 slider(L10n.text("不透明度"), value: Binding(
                     get: { current.rectangleOpacity ?? 1 },
@@ -99,12 +104,12 @@ struct LayerInspector: View {
                 if let source = editor.project.sources.first(where: { $0.id == layer.sourceID }) {
                     Text(source.name).lineLimit(1).font(.caption)
                     if layer.kind == .video {
-                        field(L10n.text("素材の開始"), value: Binding(get: { current.videoSourceStart ?? 0 }, set: { value in
+                        if layer.sound == nil { field(L10n.text("素材の開始"), value: Binding(get: { current.videoSourceStart ?? 0 }, set: { value in
                             editor.updateLayer(layer.id) {
                                 $0.videoSourceStart = min(max(0, value), max(0, source.frames - 1))
                                 $0.end = min($0.end, $0.start + source.frames - ($0.videoSourceStart ?? 0))
                             }
-                        }), fullWidth: true)
+                        }), fullWidth: true) }
                         Toggle(L10n.text("無音化"), isOn: Binding(get: { current.videoMuted == true }, set: { value in
                             editor.updateLayer(layer.id) { $0.videoMuted = value ? true : nil }
                         }))

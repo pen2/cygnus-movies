@@ -1,0 +1,3 @@
+import CygnusMoviesCore
+
+CygnusMoviesApp.main()

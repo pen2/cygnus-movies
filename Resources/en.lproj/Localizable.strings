@@ -367,3 +367,12 @@
 "処理が完了するか中止してから、ウインドウを閉じてください。" = "Wait for processing to finish or cancel it before closing this window.";
 "プロジェクトのドロップと複数ウインドウ" = "Project Drops and Multiple Windows";
 ".cygnusmoviesをウインドウへドロップするとプロジェクトを開きます。編集中の場合は新しいウインドウで開き、元の編集内容は保持します。同じプロジェクトは既存のウインドウを表示します。保存・取り消し・再生などのメニューは操作中のウインドウに適用されます。ウインドウを閉じる際は、そのプロジェクトの未保存の変更を確認します。" = "Drop a .cygnusmovies file onto a window to open it. If a project is already in use, it opens in a new window and preserves the original edits. Opening the same project shows its existing window. Save, Undo, Playback and other menus apply to the active window. Closing a window checks that project's unsaved changes.";
+
+"最新版をダウンロードする" = "Download Latest Version";
+"次回保存時に保存" = "Included on next save";
+"Pro版で開いてください。" = "Open this project in Cygnus Movies Pro.";
+"シェイプ" = "Shape";
+"音声を分離" = "Detach Audio";
+"音声を差し替え" = "Replace Audio";
+"音声トラックがありません。" = "This clip has no audio track.";
+"保存済み" = "Saved";

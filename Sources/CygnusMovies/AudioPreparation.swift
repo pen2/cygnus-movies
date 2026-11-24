@@ -1,12 +1,12 @@
 import AVFoundation
 
-struct PreparedAudio: @unchecked Sendable {
+public struct PreparedAudio: @unchecked Sendable {
     let asset: AVAsset
-    let track: AVAssetTrack
-    let range: CMTimeRange
+    public let track: AVAssetTrack
+    public let range: CMTimeRange
     let originalStart: CMTime
 
-    func mappedRange(_ original: CMTimeRange) -> CMTimeRange {
+    public func mappedRange(_ original: CMTimeRange) -> CMTimeRange {
         CMTimeRange(start: range.start + original.start - originalStart, duration: original.duration)
     }
 }
@@ -14,8 +14,8 @@ struct PreparedAudio: @unchecked Sendable {
 // Resample before adding timeline gaps. Resampling a 44.1 kHz composition lane
 // with a long empty lead-in directly to 48 kHz can shorten that lead-in in
 // AVAssetReaderAudioMixOutput. Canonical source tracks avoid that conversion.
-actor AudioPreparationCache {
-    static let shared = AudioPreparationCache()
+public actor AudioPreparationCache {
+    public static let shared = AudioPreparationCache()
     nonisolated let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("cygnus-audio-\(UUID().uuidString)", isDirectory: true)
 
@@ -28,7 +28,7 @@ actor AudioPreparationCache {
     private var tasks: [Key: Task<Void, Never>] = [:]
     private var results: [Key: Result<PreparedAudio, Error>] = [:]
 
-    func prepare(asset: AVURLAsset, track: AVAssetTrack, range: CMTimeRange) async throws -> PreparedAudio {
+    public func prepare(asset: AVURLAsset, track: AVAssetTrack, range: CMTimeRange) async throws -> PreparedAudio {
         try Task.checkCancellation()
         let descriptions = try await track.load(.formatDescriptions)
         let rates = descriptions.compactMap { CMAudioFormatDescriptionGetStreamBasicDescription($0)?.pointee.mSampleRate }

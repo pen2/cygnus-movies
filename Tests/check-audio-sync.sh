@@ -10,7 +10,7 @@ python3 Tests/audio-sync-fixtures.py "$folder"
 arch=$(/usr/bin/uname -m)
 xcrun swiftc -swift-version 5 -parse-as-library -O -target "$arch-apple-macosx13.0" \
     -module-cache-path .build/clang-cache \
-    Sources/CygnusMovies/{Project,Editor,Export,Media,AudioPreparation,VisualLayer,LayerRendering,Compositor,Localization,TimelineInteraction,TemporaryMedia,PreviewActions}.swift \
+    Sources/CygnusMovies/{EditionFeatures,Project,Editor,Export,Media,AudioPreparation,VisualLayer,LayerRendering,Compositor,Localization,TimelineInteraction,TemporaryMedia,PreviewActions}.swift \
     Tests/AudioSyncCheck.swift -o "$folder/check"
 "$folder/check" "$folder"
 python3 Tests/audio-sync-verify.py "$folder"

@@ -96,6 +96,14 @@ struct VisualLayer: Identifiable, Codable, Equatable {
     var start: Int
     var end: Int
     var region: CanvasRegion
+    var sound: AudioSegment?
+    func fits(sourceFrames: Int) -> Bool {
+        let offset = sound?.sourceFrame ?? Double(videoSourceStart ?? 0)
+        let rate = sound?.rate ?? 1
+        return offset.isFinite && offset >= 0 && (0.001...1000).contains(rate) && offset + Double(end - start) * rate <= Double(sourceFrames) + 0.000001
+    }
+    var artworkID: String?
+    var effectParameters: EffectParameters?
     var intensity = 0.5
     var text = L10n.text("テキスト")
     var textSize = 0.075
@@ -121,7 +129,12 @@ struct VisualLayer: Identifiable, Codable, Equatable {
     var animationStart: Int { start + (animationSpan?.offset ?? 0) }
     var animationLength: Int { animationSpan?.length ?? (end - start) }
 
-    var title: String { kind == .text && !text.isEmpty ? text : kind.title }
+    var displayKind: String {
+        if sound != nil { return L10n.text("音声") }
+        if let artworkID, let effects = MovieExtensions.effects { return effects.title(for: artworkID) }
+        return kind.title
+    }
+    var title: String { kind == .text && !text.isEmpty ? text : displayKind }
 
     static let fontSizeRange = 1.0...2160.0
     static let outlineRange = 0.0...256.0
@@ -135,7 +148,8 @@ struct VisualLayer: Identifiable, Codable, Equatable {
     }
 
     var isValid: Bool {
-        start >= 0 && end > start && end <= Self.maximumEnd
+        (sound.map { abs(Double($0.envelopeOffset)) <= 300_000_000 && (1...30_000_000).contains($0.envelopeLength) && (0...90).contains($0.fadeIn) && (0...90).contains($0.fadeOut) && (0...90).contains($0.overlapIn) && (0...90).contains($0.overlapOut) } ?? true)
+            && start >= 0 && end > start && end <= Self.maximumEnd
             && region.isValid && (0...1).contains(intensity)
             && (0.01...0.25).contains(textSize) && (0...0.2).contains(outline)
             && (fontSizePoints.map(Self.fontSizeRange.contains) ?? true)

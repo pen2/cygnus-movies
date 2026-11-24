@@ -72,6 +72,9 @@ func inspectSource(_ url: URL) async throws -> Source {
         _ = try loadStillImage(url, maximumSize: 180)
         return Source(path: url.path, frames: Source.maxImageFrames, stillImage: true)
     }
+    if let audio = MovieExtensions.audio, let frames = try await audio.sourceFrames(url) {
+        return Source(path: url.path, frames: frames, audioOnly: true)
+    }
     guard ["mp4", "mov"].contains(ext) else {
         throw MovieError(L10n.text("MOV、MP4、または対応する画像を選択してください。"))
     }
@@ -185,7 +188,12 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
 
     for layer in timeline.layers {
         try Task.checkCancellation()
-        if layer.kind == .video {
+        if let segment = layer.sound, let id = layer.sourceID, let source = references[id], let audio = MovieExtensions.audio {
+            if let input = try await audio.insert(segment, url: source.url, start: layer.start, length: layer.end-layer.start,
+                                                  gain: layer.videoMuted == true ? 0 : Float(layer.videoVolume ?? 1), composition: asset) {
+                audioParameters.append(input)
+            }
+        } else if layer.kind == .video {
             guard let id = layer.sourceID, let reference = references[id], !reference.isImage else {
                 throw MovieError(L10n.text("動画レイヤーに素材が設定されていません。"))
             }
@@ -271,6 +279,7 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
         }
     }
 
+    let separated = Set(timeline.layers.compactMap { $0.sound?.originatingClip })
     for (index, placement) in placements.enumerated() {
         try Task.checkCancellation()
         let clip = placement.clip
@@ -281,7 +290,7 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
         let track = videoTracks[lane]
         let media: MediaSource?
         let sourceRange: CMTimeRange
-        let primary: PictureInstruction.Layer
+        var primary: PictureInstruction.Layer
 
         if reference.isImage {
             sourceRange = .zero
@@ -327,7 +336,7 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
         let parameters = audioParameters[lane]
         let gain = clip.gain
 
-        if let movie = media, let sourceAudio = movie.audio, let audioRange = movie.audioRange {
+        if !(clip.muted == true && separated.contains(clip.id)), let movie = media, let sourceAudio = movie.audio, let audioRange = movie.audioRange {
             let available = sourceRange.intersection(audioRange)
             if available.duration > .zero {
                 let prepared = try await AudioPreparationCache.shared.prepare(asset: movie.asset, track: sourceAudio, range: audioRange)
@@ -377,6 +386,8 @@ func compose(_ timeline: Timeline, sources: [Source], includeVisualLayers: Bool 
             }
         }
 
+        primary.parameters = clip.effectParameters
+        primary.outgoingEffect = clip.customTransition
         pictureLayers.append(primary)
         if placement.overlapBefore > 0 {
             let previous = pictureLayers[index - 1]

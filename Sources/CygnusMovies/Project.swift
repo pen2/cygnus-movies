@@ -114,18 +114,20 @@ struct OutputSettings: Codable, Equatable {
     }
 }
 
-struct Source: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var path: String
-    var frames: Int
+public struct Source: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var path: String
+    public var frames: Int
     var hiddenFromLibrary: Bool?
     var stillImage: Bool?
-    var temporary: Bool?
+    var audioOnly: Bool?
+    public var managed: Bool?
+    public var temporary: Bool?
     var videoInfo: SourceVideoInfo?
     var isImage: Bool { stillImage == true }
     static let maxImageFrames = 30 * 60 * 60
     var url: URL { URL(fileURLWithPath: path) }
-    var name: String {
+    public var name: String {
         guard temporary == true else { return url.lastPathComponent }
         let title = isImage ? L10n.text("クリップボード画像") : L10n.text("クリップボード動画")
         return "\(title) \(id.uuidString.prefix(4))"
@@ -179,16 +181,19 @@ struct ClipColorCorrection: Codable, Equatable {
     }
 }
 
-struct Clip: Identifiable, Codable, Equatable {
-    var id = UUID()
+public struct Clip: Identifiable, Codable, Equatable {
+    public var id = UUID()
     var sourceID: UUID
     var start = 0
     var end: Int
-    var fadeIn = false
-    var fadeOut = false
+    public var fadeIn = false
+    public var fadeOut = false
+    var effectParameters: EffectParameters?
+    var customTransition: String?
+    var transitionFrames: Int?
     var transition = Transition.cut
-    var volume: Double?
-    var muted: Bool?
+    public var volume: Double?
+    public var muted: Bool?
     var canvasFill: CanvasFill?
     var continuationID: UUID?
     var speed: Double?
@@ -200,11 +205,11 @@ struct Clip: Identifiable, Codable, Equatable {
     var gain: Float { muted == true ? 0 : Float(min(1, max(0, volume ?? 1))) }
     static let speedRange = 0.1...8.0
     var playbackRate: Double { speed ?? 1 }
-    var sourceStart: Double { sourceIn ?? Double(start) }
+    public var sourceStart: Double { sourceIn ?? Double(start) }
     var sourceEnd: Double { sourceOut ?? Double(end) }
     var sourceLength: Double { sourceEnd - sourceStart }
-    var length: Int { timelineFrames ?? max(1, Int((sourceLength / playbackRate).rounded())) }
-    var sourceFramesPerTimelineFrame: Double { sourceLength / Double(length) }
+    public var length: Int { timelineFrames ?? max(1, Int((sourceLength / playbackRate).rounded())) }
+    public var sourceFramesPerTimelineFrame: Double { sourceLength / Double(length) }
 
     mutating func setSourceRange(start: Double, end: Double, duration: Int? = nil) {
         let start = abs(start - start.rounded()) < 0.0000001 ? start.rounded() : start
@@ -234,15 +239,23 @@ struct Timeline: Identifiable, Codable, Equatable {
     var hasContent: Bool { !clips.isEmpty || !layers.isEmpty }
 }
 
-struct Project: Codable, Equatable {
-    var version = 1
-    var name: String?
+public struct Project: Codable, Equatable {
+    public var version = 1
+    public var name: String?
     var numberTimelines: Bool?
     var automaticOutput: AutomaticOutput?
-    var sources: [Source] = []
+    public var sources: [Source] = []
     var timelines = [Timeline(name: L10n.text("タイムライン 1"))]
 
-    func validate() throws {
+    public var needsExtendedFormat: Bool {
+        sources.contains { $0.managed == true || $0.audioOnly == true } || timelines.contains { timeline in
+            timeline.clips.contains { $0.effectParameters != nil || $0.customTransition != nil || $0.transitionFrames != nil }
+                || timeline.layers.contains { $0.artworkID != nil || $0.effectParameters != nil || $0.sound != nil }
+        }
+    }
+
+    public func validate() throws {
+        if version == 2 { throw MovieError(L10n.text("Pro版で開いてください。")) }
         guard version == 1, !timelines.isEmpty,
               Set(sources.map(\.id)).count == sources.count,
               Set(timelines.map(\.id)).count == timelines.count,
@@ -260,7 +273,7 @@ struct Project: Codable, Equatable {
                   timeline.layers.allSatisfy({ layer in
                       layer.isValid && (layer.kind != .image || layer.sourceID.map(images.contains) == true)
                           && (layer.kind != .video || layer.sourceID.map { movies.contains($0) &&
-                              (layer.videoSourceStart ?? 0) + layer.end - layer.start <= (lengths[$0] ?? 0) } == true)
+                              layer.fits(sourceFrames: lengths[$0] ?? 0) } == true)
                   }),
                   timeline.clips.allSatisfy({
                       guard let length = lengths[$0.sourceID] else { return false }
@@ -276,11 +289,11 @@ struct Project: Codable, Equatable {
     }
 }
 
-struct Placement {
-    let clip: Clip
+public struct Placement {
+    public let clip: Clip
     let start: Int
-    let overlapBefore: Int
-    let overlapAfter: Int
+    public let overlapBefore: Int
+    public let overlapAfter: Int
 
     var end: Int { start + clip.length }
 }
@@ -297,12 +310,14 @@ private func clipGroups(_ clips: [Clip]) -> [ClipGroup] {
            clip.sourceID == previous.sourceID, abs(clip.sourceStart - previous.sourceEnd) < 0.000001,
            previous.transition == .cut, !previous.fadeOut, !clip.fadeIn,
            clip.gain == previous.gain, clip.canvasFill == previous.canvasFill,
-           clip.playbackRate == previous.playbackRate, clip.colorCorrection == previous.colorCorrection {
+           clip.playbackRate == previous.playbackRate, clip.colorCorrection == previous.colorCorrection, clip.effectParameters == previous.effectParameters {
             let index = groups.count - 1
             groups[index].combined.timelineFrames = previous.length + clip.length
             groups[index].combined.end = clip.end
             groups[index].combined.sourceOut = clip.sourceOut
             groups[index].combined.fadeOut = clip.fadeOut
+            groups[index].combined.customTransition = clip.customTransition
+            groups[index].combined.transitionFrames = clip.transitionFrames
             groups[index].combined.transition = clip.transition
             groups[index].fragments.append(clip)
         } else {
@@ -335,7 +350,7 @@ func layout(_ clips: [Clip]) -> [Placement] {
 private func placementLayout(_ clips: [Clip]) -> [Placement] {
     let overlaps = clips.indices.map { index in
         guard index + 1 < clips.count, clips[index].transition != .cut else { return 0 }
-        return min(9, clips[index].length / 3, clips[index + 1].length / 3)
+        return min(max(1, min(90, clips[index].transitionFrames ?? 9)), clips[index].length / 3, clips[index + 1].length / 3)
     }
     var position = 0
     return clips.indices.map { index in
@@ -360,4 +375,20 @@ struct MovieError: LocalizedError {
     let message: String
     init(_ message: String) { self.message = message }
     var errorDescription: String? { message }
+}
+
+@MainActor public protocol ProjectDocuments {
+    func save(_ project: Project, to url: URL) throws -> Project
+    func read(_ url: URL) throws -> Project
+    func changed(_ project: Project, id: UUID, original: URL?, failed: @escaping (Error) -> Void)
+    func forget(_ id: UUID)
+    func stage(_ source: Source, id: UUID) async throws
+    func authorize(_ url: URL)
+    func offerRecovery(_ recover: (UUID, Project) -> Void)
+}
+
+@MainActor public enum Edition {
+    public static var helpTopics: (() -> [(String,String)])?
+    public static var documents: ProjectDocuments?
+    public static var name = "Cygnus Movies"
 }

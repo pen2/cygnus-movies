@@ -29,7 +29,16 @@ final class Editor: ObservableObject {
         var encoder: EncodingMode?
     }
 
-    @Published private(set) var project = Project()
+    let recoveryID: UUID
+    @Published private(set) var project = Project() {
+        didSet {
+            if dirty {
+                Edition.documents?.changed(project, id: recoveryID, original: projectURL) { [weak self] in
+                    self?.error = $0.localizedDescription
+                }
+            } else { Edition.documents?.forget(recoveryID) }
+        }
+    }
     @Published private var undoEdits: [Edit] = []
     @Published private var redoEdits: [Edit] = []
 
@@ -113,7 +122,7 @@ final class Editor: ObservableObject {
     }
     var completedExportCount: Int { jobs.filter { if case .complete = $0.status { return true }; return false }.count }
     var windowTitle: String {
-        let title = projectName.map { "\($0) — Cygnus Movies" } ?? "Cygnus Movies"
+        let title = projectName.map { "\($0) — \(Edition.name)" } ?? Edition.name
         return exporting ? "\(title) — \(L10n.text("書き出し")) \(Int(overallExportProgress * 100))%" : title
     }
 
@@ -160,6 +169,7 @@ final class Editor: ObservableObject {
     private var seekingWhilePlaying = false
     private var observer: Any?
     private var previewEndObserver: AnyCancellable?
+    private(set) var exportStart = Date()
     private var exportTask: Task<Void, Never>?
     private var saved = Project()
     private var lastImportedURL: URL?
@@ -168,7 +178,8 @@ final class Editor: ObservableObject {
     private var committedPreviewID: UUID?
     private var projectGeneration = UUID()
 
-    init() {
+    init(recoveryID: UUID = UUID()) {
+        self.recoveryID = recoveryID
         saved = project
         observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 60), queue: .main) { [weak self] time in
             MainActor.assumeIsolated {
@@ -365,6 +376,11 @@ final class Editor: ObservableObject {
 
     func addClip(_ source: Source, at index: Int? = nil, to destination: UUID? = nil) {
         guard let target = project.timelines.firstIndex(where: { $0.id == (destination ?? timeline.id) }) else { return }
+        if source.audioOnly == true {
+            let start = index.flatMap { layout(project.timelines[target].clips).indices.contains($0) ? layout(project.timelines[target].clips)[$0].start : nil } ?? (target == timelineIndex ? playhead : 0)
+            insertSound(source, timelineIndex: target, start: start)
+            return
+        }
         let firstVideo = !source.isImage && !project.timelines.flatMap(\.clips).contains { clip in
             project.sources.first(where: { $0.id == clip.sourceID })?.isImage == false
         }
@@ -375,6 +391,51 @@ final class Editor: ObservableObject {
             if timelineIndex == target { selectClip(clip.id) }
         }
         if firstVideo { autoFitFrames = max(1, timelineFrames(project.timelines[target])); autoFitToken = UUID() }
+    }
+
+    private func insertSound(_ source: Source, timelineIndex target: Int, start: Int, replacing clip: Clip? = nil, detached: Bool = false) {
+        let placement = clip.flatMap { c in placements.first { $0.clip.id == c.id } }
+        guard let segment = MovieExtensions.audio?.segment(for: placement, source: source, detached: detached, maximumLength: VisualLayer.maximumEnd-start) else { return }
+        var layer = VisualLayer(kind: .video, start: start, end: start+segment.envelopeLength,
+                                region: CanvasRegion(x: 0,y: 0,width: 1,height: 1), sourceID: source.id)
+        layer.sound = segment
+        if detached { layer.videoVolume = clip?.volume; layer.videoMuted = clip?.muted }
+        edit {
+            if let clip, let i = project.timelines[target].clips.firstIndex(where: { $0.id == clip.id }) {
+                project.timelines[target].clips[i].muted = true
+                project.timelines[target].layers.removeAll { $0.sound?.originatingClip == clip.id }
+            }
+            project.timelines[target].layers.append(layer)
+            if target == timelineIndex { selectLayer(layer.id) }
+        }
+    }
+
+    func clipSound(_ clip: Clip, replacement: Source?) {
+        guard let source = replacement ?? project.sources.first(where: { $0.id == clip.sourceID }),
+              let placement = placements.first(where: { $0.clip.id == clip.id }) else { return }
+        if replacement == nil {
+            let target = timeline.id
+            Task {
+                do {
+                    let audio = try await AVURLAsset(url: source.url).loadTracks(withMediaType: .audio)
+                    guard !audio.isEmpty else { throw MovieError(L10n.text("音声トラックがありません。")) }
+                    guard timeline.id == target, timeline.clips.contains(clip) else { return }
+                    insertSound(source, timelineIndex: timelineIndex, start: placements.first { $0.clip.id == clip.id }!.start, replacing: clip, detached: true)
+                } catch { self.error = error.localizedDescription }
+            }
+        } else { insertSound(source, timelineIndex: timelineIndex, start: placement.start, replacing: clip) }
+    }
+
+    func importRecording(_ url: URL, at frame: Int, timeline target: UUID) {
+        Task {
+            do {
+                let local = try temporaryMedia.destination(extension: "wav")
+                try FileManager.default.copyItem(at: url, to: local)
+                defer { try? FileManager.default.removeItem(at: url) }
+                let source = try await registerSource(local, temporary: true)
+                if let index = project.timelines.firstIndex(where: { $0.id == target }) { insertSound(source,timelineIndex:index,start:frame) }
+            } catch { self.error = error.localizedDescription }
+        }
     }
 
     func moveClip(_ id: UUID, to insertion: Int) {
@@ -588,7 +649,7 @@ final class Editor: ObservableObject {
         }
     }
 
-    func addLayer(_ kind: LayerKind, source: Source? = nil, duration: Int = 180) {
+    func addLayer(_ kind: LayerKind, source: Source? = nil, duration: Int = 180, artworkID: String? = nil) {
         guard kind != .image || source?.isImage == true else { return }
         guard kind != .video || source?.isImage == false else { return }
         let length = min(VisualLayer.maximumEnd, kind == .video ? min(max(1, duration), source!.frames) : max(180, duration))
@@ -601,6 +662,7 @@ final class Editor: ObservableObject {
         case .blur, .mosaic: region = CanvasRegion(x: 0.32, y: 0.32, width: 0.36, height: 0.36)
         }
         var layer = VisualLayer(kind: kind, start: start, end: start + length, region: region, sourceID: source?.id)
+        layer.artworkID = artworkID
         if kind == .text {
             let canvas = timeline.output.size
             layer.outlinePixels = layer.strokePixels(in: canvas)
@@ -653,7 +715,14 @@ final class Editor: ObservableObject {
             let previousEnd = $0.end
             if let start { $0.start = min($0.end - 1, max(0, start)) }
             if let end { $0.end = min(VisualLayer.maximumEnd, max($0.start + 1, end)) }
-            if $0.kind == .video, let sourceFrames {
+            if var sound = $0.sound, let sourceFrames {
+                $0.start = max(previousStart - Int(sound.sourceFrame / sound.rate), $0.start)
+                let delta = $0.start - previousStart
+                sound.sourceFrame += Double(delta)*sound.rate
+                sound.envelopeOffset += delta
+                $0.end = min($0.end, $0.start + Int(((Double(sourceFrames)-sound.sourceFrame)/sound.rate + 0.000001).rounded(.down)))
+                $0.sound = sound
+            } else if $0.kind == .video, let sourceFrames {
                 let oldOffset = $0.videoSourceStart ?? 0
                 $0.start = max(previousStart - oldOffset, $0.start)
                 $0.videoSourceStart = oldOffset + $0.start - previousStart
@@ -758,6 +827,8 @@ final class Editor: ObservableObject {
                     left.setSourceRange(start: clip.sourceStart, end: point, duration: length)
                     left.fadeOut = false
                     left.transition = .cut
+                    left.customTransition = nil
+                    left.transitionFrames = nil
                     left.continuationID = group
                     right.id = UUID()
                     right.setSourceRange(start: point, end: clip.sourceEnd, duration: clip.length - length)
@@ -774,7 +845,8 @@ final class Editor: ObservableObject {
                     left.end = cut
                     right.id = UUID()
                     right.start = cut
-                    if layer.kind == .video { right.videoSourceStart = (layer.videoSourceStart ?? 0) + cut - layer.start }
+                    if var sound = layer.sound { sound.sourceFrame += Double(cut-layer.start)*sound.rate; sound.envelopeOffset += cut-layer.start; right.sound = sound }
+                    else if layer.kind == .video { right.videoSourceStart = (layer.videoSourceStart ?? 0) + cut - layer.start }
                     if (layer.entrance ?? .cut) != .cut || (layer.exit ?? .cut) != .cut {
                         left.animationSpan = .init(offset: layer.animationStart - left.start, length: layer.animationLength)
                         right.animationSpan = .init(offset: layer.animationStart - right.start, length: layer.animationLength)
@@ -943,7 +1015,7 @@ final class Editor: ObservableObject {
     }
 
     func chooseSources() {
-        let panel = mediaPanel(multiple: true, types: [.mpeg4Movie, .quickTimeMovie, .image])
+        let panel = mediaPanel(multiple: true, types: [.mpeg4Movie, .quickTimeMovie, .image] + (MovieExtensions.audio == nil ? [] : [.audio]))
         if panel.runModal() == .OK { importSources(panel.urls) }
     }
 
@@ -967,12 +1039,13 @@ final class Editor: ObservableObject {
 
     private func registerSource(_ url: URL, temporary: Bool = false) async throws -> Source {
         let generation = projectGeneration
+        Edition.documents?.authorize(url)
         let url = url.standardizedFileURL
         if let index = project.sources.firstIndex(where: { $0.path == url.path }) {
             edit {
                 project.sources[index].hiddenFromLibrary = nil
                 if temporary { project.sources[index].temporary = true }
-                if project.automaticOutput == nil, project.sources.first(where: { !$0.isImage })?.id == project.sources[index].id,
+                if project.automaticOutput == nil, project.sources.first(where: { !$0.isImage && $0.audioOnly != true })?.id == project.sources[index].id,
                    let info = project.sources[index].videoInfo {
                     applyOutputDefaults(info, sourceIndex: index)
                 }
@@ -984,11 +1057,12 @@ final class Editor: ObservableObject {
         }
         var source = try await inspectSource(url)
         source.temporary = temporary ? true : nil
-        let firstVideo = !source.isImage && !project.sources.contains(where: { !$0.isImage })
+        if temporary { try await Edition.documents?.stage(source, id: recoveryID) }
+        let firstVideo = !source.isImage && source.audioOnly != true && !project.sources.contains(where: { !$0.isImage && $0.audioOnly != true })
         guard generation == projectGeneration else { throw CancellationError() }
         edit {
             project.sources.append(source)
-            if project.automaticOutput == nil, project.sources.first(where: { !$0.isImage })?.id == source.id,
+            if project.automaticOutput == nil, project.sources.first(where: { !$0.isImage && $0.audioOnly != true })?.id == source.id,
                let info = source.videoInfo {
                 applyOutputDefaults(info, sourceIndex: project.sources.count - 1)
             }
@@ -1000,7 +1074,7 @@ final class Editor: ObservableObject {
     }
 
     private func initializeOutputDefaults() async {
-        guard project.automaticOutput == nil, let source = project.sources.first(where: { !$0.isImage }) else { return }
+        guard project.automaticOutput == nil, let source = project.sources.first(where: { !$0.isImage && $0.audioOnly != true }) else { return }
         let generation = projectGeneration
         let info: SourceVideoInfo?
         if let saved = source.videoInfo { info = saved }
@@ -1042,14 +1116,15 @@ final class Editor: ObservableObject {
 
     func relink(_ source: Source) {
         guard !loadingSources else { return }
-        let panel = mediaPanel(multiple: false, types: source.isImage ? [.image] : [.mpeg4Movie, .quickTimeMovie])
+        let panel = mediaPanel(multiple: false, types: source.audioOnly == true ? [.audio] : source.isImage ? [.image] : [.mpeg4Movie, .quickTimeMovie])
         guard panel.runModal() == .OK, let url = panel.url else { return }
         loadingSources = true
         Task {
             defer { loadingSources = false }
             do {
+                Edition.documents?.authorize(url)
                 var replacement = try await inspectSource(url)
-                guard replacement.isImage == source.isImage else {
+                guard replacement.isImage == source.isImage, replacement.audioOnly == source.audioOnly else {
                     throw MovieError(L10n.text("元の素材と同じ種類のファイルを選択してください。"))
                 }
                 let clipEnd = project.timelines.flatMap(\.clips).filter { $0.sourceID == source.id }.map(\.end).max() ?? 0
@@ -1090,7 +1165,7 @@ final class Editor: ObservableObject {
     @discardableResult
     func save(asNew: Bool = false) -> Bool {
         guard !loadingSources else { return false }
-        if project.sources.contains(where: { $0.temporary == true }) {
+        if Edition.documents == nil, project.sources.contains(where: { $0.temporary == true }) {
             let alert = NSAlert()
             alert.messageText = L10n.text("一時素材は保存されません")
             alert.informativeText = L10n.text("一時素材と、それを使うクリップ・画像／動画レイヤーは保存対象から外れます。書き出した動画には含まれます。")
@@ -1115,7 +1190,12 @@ final class Editor: ObservableObject {
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(project.withoutTemporaryMedia).write(to: target, options: .atomic)
+            if let storage = Edition.documents {
+                project = try storage.save(project, to: target)
+                storage.forget(recoveryID)
+            } else {
+                try encoder.encode(project.withoutTemporaryMedia).write(to: target, options: .atomic)
+            }
             projectURL = target
             saved = project
             return true
@@ -1159,7 +1239,7 @@ final class Editor: ObservableObject {
     func openProject(at url: URL) -> Bool {
         guard !loadingSources, mayDiscardChanges() else { return false }
         do {
-            let document = try JSONDecoder().decode(Project.self, from: Data(contentsOf: url))
+            let document = try Edition.documents?.read(url) ?? JSONDecoder().decode(Project.self, from: Data(contentsOf: url))
             try document.validate()
             replaceProject(document, url: url)
             return true
@@ -1169,7 +1249,22 @@ final class Editor: ObservableObject {
         }
     }
 
-    private func replaceProject(_ document: Project, url: URL?) {
+    func restore(_ document: Project) {
+        var active = document
+        do {
+            for i in active.sources.indices where active.sources[i].managed == true {
+                let url = active.sources[i].url
+                let copy = try temporaryMedia.destination(extension: url.pathExtension)
+                try FileManager.default.copyItem(at: url, to: copy)
+                active.sources[i].path = copy.path
+                active.sources[i].temporary = true
+                active.sources[i].managed = nil
+            }
+            replaceProject(active, url: nil, recovered: true)
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func replaceProject(_ document: Project, url: URL?, recovered: Bool = false) {
         autoFitFrames = nil
         projectGeneration = UUID()
         player.replaceCurrentItem(with: nil)
@@ -1180,8 +1275,8 @@ final class Editor: ObservableObject {
         lastImportedURL = nil
         undoEdits.removeAll()
         redoEdits.removeAll()
+        saved = recovered ? Project() : document
         project = document
-        saved = document
         projectURL = url
         timelineID = nil
         selection = nil
@@ -1277,22 +1372,31 @@ final class Editor: ObservableObject {
         let queue = jobs
         let sources = project.sources
         let useHardware = EncodingPreferences.useHardware
+        let controller = MovieExtensions.exports
+        controller?.started()
+        exportStart = Date()
         exporting = true
         exportTask = Task.detached { [weak self] in
             await withTaskGroup(of: Void.self) { group in
-                for lane in 0..<min(2, queue.count) {
+                let lanes = controller == nil ? min(2, queue.count) : queue.count
+                for lane in 0..<lanes {
                     group.addTask { [weak self] in
-                        for index in stride(from: lane, to: queue.count, by: 2) {
+                        for index in stride(from: lane, to: queue.count, by: lanes) {
                             let job = queue[index]
                             do {
                                 try Task.checkCancellation()
-                                await self?.updateJob(job.id, status: .exporting)
-                                try await exportMovie(job.timeline, sources: sources, to: job.destination,
-                                                      useHardware: useHardware, encoderSelected: { [weak self] mode in
-                                    await self?.recordEncoder(job.id, mode: mode)
-                                }) { [weak self] value in
-                                    await self?.updateJob(job.id, progress: value)
-                                }
+                                try await controller?.acquire()
+                                do {
+                                    try Task.checkCancellation()
+                                    await self?.updateJob(job.id, status: .exporting)
+                                    try await exportMovie(job.timeline, sources: sources, to: job.destination,
+                                                          useHardware: useHardware, encoderSelected: { [weak self] mode in
+                                        await self?.recordEncoder(job.id, mode: mode)
+                                    }) { [weak self] value in
+                                        await self?.updateJob(job.id, progress: value)
+                                    }
+                                } catch { await controller?.release(); throw error }
+                                await controller?.release()
                                 await self?.updateJob(job.id, status: .complete, progress: 1)
                             } catch {
                                 let status = Task.isCancelled ? ExportStatus.canceled : .failed(error.localizedDescription)
@@ -1313,8 +1417,12 @@ final class Editor: ObservableObject {
         jobs[index].encoder = mode
     }
 
+    var showExportWindow: (() -> Void)?
+
     private func finishExports() {
         exporting = false
+        let canceled = jobs.filter { if case .canceled = $0.status { return true }; return false }.count
+        MovieExtensions.exports?.completed(success: completedExportCount, failed: jobs.count - completedExportCount - canceled, canceled: canceled) { [weak self] in self?.showExportWindow?(); self?.showingJobs = true }
         exportTask = nil
     }
 

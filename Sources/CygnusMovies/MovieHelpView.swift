@@ -3,7 +3,8 @@ import SwiftUI
 struct MovieHelpView: View {
     @AppStorage(AppLanguage.preferenceKey) private var language = AppLanguage.system
 
-    private var topics: [(String, String)] { [
+    private var topics: [(String, String)] {
+        let base = [
         (L10n.text("プレビューと一時素材"), L10n.text("Spaceで再生・停止、左右キーで1コマずつ移動します。フレーム表示の右のボタンで、テキストや効果を含めた画像をコピー・共有できます。「クリップボードから一時追加」は画像・動画をこの起動中だけ素材として扱います。一時素材と使用クリップ・画像レイヤーはプロジェクトには保存されず、終了時に破棄されます。動画の書き出しには含まれます。複数書き出しの全体進捗は、書き出し状況とタイトルバーに表示されます。")),
         (L10n.text("自動設定・色補正・再生速度"), L10n.text("最初に読み込んだ動画から、解像度・画面比率・fpsに最も近い設定を選びます。この3項目を手動変更すると自動選択の表示が消えます。クリップ設定では、明るさ・色温度・色かぶり・ガンマ・彩度・色相を調整できます。再生速度は10〜800％の数値で指定でき、音声の高さを保持します。")),
         (L10n.text("ハードウェアエンコード"), L10n.text("「設定…」でハードウェアエンコードをオン・オフできます。オンの場合は対応するハードウェアを優先し、利用できなければソフトウェアに切り替えます。「書き出し状況」で使用した方式を確認できます。")),
@@ -22,7 +23,12 @@ struct MovieHelpView: View {
         (L10n.text("書き出しと音声"), L10n.text("MOVまたはMP4、30または60 fps、SDRまたはHDRを選べます。HDRはHEVC 10-bitのHLGです。音声はAACと音声なしを選べ、MOVではApple LosslessとリニアPCMも選べます。音声波形はスイッチで表示し、音量と無音化はクリップごとに設定します。複数タイムラインはまとめて書き出せます。")),
         (L10n.text("プロジェクトのドロップと複数ウインドウ"), L10n.text(".cygnusmoviesをウインドウへドロップするとプロジェクトを開きます。編集中の場合は新しいウインドウで開き、元の編集内容は保持します。同じプロジェクトは既存のウインドウを表示します。保存・取り消し・再生などのメニューは操作中のウインドウに適用されます。ウインドウを閉じる際は、そのプロジェクトの未保存の変更を確認します。")),
         (L10n.text("Finderから開く"), L10n.text("「ファイル」→「プロジェクトファイルを関連付け…」を選ぶと、.cygnusmoviesをダブルクリックで開くアプリに設定できます。macOSが確認を求めた場合は許可してください。"))
-    ] }
+        ]
+        guard let additional = Edition.helpTopics else { return base }
+        return additional() + base.filter { topic in
+            topic.0 != L10n.text("プレビューと一時素材") && topic.0 != L10n.text("切り替え効果")
+        }
+    }
 
     var body: some View {
         let _ = language

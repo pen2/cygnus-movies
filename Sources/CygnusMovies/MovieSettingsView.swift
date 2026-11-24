@@ -12,6 +12,7 @@ struct MovieSettingsView: View {
                 .toggleStyle(.switch)
             Text(L10n.text("対応するMacではハードウェアを優先します。利用できない場合はソフトウェアに切り替えます。オフにするとソフトウェアで書き出します。"))
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            MovieExtensions.exports?.settings()
             Text(L10n.text("実際に使用した方式は「書き出し状況」に表示されます。"))
                 .font(.caption).foregroundStyle(.secondary)
         }
