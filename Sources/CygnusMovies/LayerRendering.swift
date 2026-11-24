@@ -77,18 +77,21 @@ struct RenderedVisualLayer {
         let elapsed = (time - start).seconds
         let remaining = (start + length - time).seconds
         if let transition = layer.entrance, transition != .cut, elapsed < duration {
-            return transitioned(result, over: image, in: rect, progress: elapsed / duration, transition: transition)
+            return transitioned(result, over: image, in: rect, progress: elapsed / duration, transition: transition, custom: layer.entranceEffect)
         }
         if let transition = layer.exit, transition != .cut, remaining < duration {
-            return transitioned(result, over: image, in: rect, progress: remaining / duration, transition: transition)
+            return transitioned(result, over: image, in: rect, progress: remaining / duration, transition: transition, custom: layer.exitEffect)
         }
         return result.cropped(to: rect).composited(over: image)
     }
 
     private func transitioned(_ overlay: CIImage, over image: CIImage, in rect: CGRect,
-                              progress: Double, transition: Transition) -> CIImage {
+                              progress: Double, transition: Transition, custom: String?) -> CIImage {
         guard progress > 0 else { return image }
         let fraction = min(1, progress)
+        if let custom, let result = MovieExtensions.effects?.layerTransition(custom, overlay: overlay.cropped(to: rect), progress: fraction, bounds: rect) {
+            return result.cropped(to: rect).composited(over: image)
+        }
         switch transition {
         case .cut:
             return overlay.cropped(to: rect).composited(over: image)

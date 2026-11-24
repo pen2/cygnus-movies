@@ -14,6 +14,8 @@ public protocol MovieEffects {
     @MainActor func clipInspector(parameters: Binding<EffectParameters?>, transition: Binding<String>, frames: Binding<Int>, maximum: Int, video: Bool) -> AnyView
     @MainActor func shapeInspector(parameters: Binding<EffectParameters?>, shape: Binding<String?>) -> AnyView
     @MainActor func guide(shape: String?, parameters: Binding<EffectParameters?>, frame: CGRect, canvas: CGSize) -> AnyView
+    @MainActor func transitionPicker(_ title: String, selection: Binding<String>) -> AnyView
+    func layerTransition(_ id: String, overlay: CIImage, progress: Double, bounds: CGRect) -> CIImage?
     func artwork(shape: String, parameters: EffectParameters?, size: CGSize, fill: CGColor) -> CGImage?
     func foreground(_ image: CIImage, parameters: EffectParameters, canvas: CGRect) -> CIImage
     func transition(_ id: String, from: CIImage, to: CIImage, progress: Double, bounds: CGRect) -> CIImage?

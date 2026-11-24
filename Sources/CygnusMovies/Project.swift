@@ -250,7 +250,7 @@ public struct Project: Codable, Equatable {
     public var needsExtendedFormat: Bool {
         sources.contains { $0.managed == true || $0.audioOnly == true } || timelines.contains { timeline in
             timeline.clips.contains { $0.effectParameters != nil || $0.customTransition != nil || $0.transitionFrames != nil }
-                || timeline.layers.contains { $0.artworkID != nil || $0.effectParameters != nil || $0.sound != nil }
+                || timeline.layers.contains { $0.entranceEffect != nil || $0.exitEffect != nil || $0.artworkID != nil || $0.effectParameters != nil || $0.sound != nil }
         }
     }
 

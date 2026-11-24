@@ -26,9 +26,10 @@ struct LayerInspector: View {
             Text(timecode(layer.start) + "  –  " + timecode(layer.end))
                 .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
             if layer.sound == nil {
-            transitionPicker(L10n.text("開始時の効果"), key: \.entrance)
-            transitionPicker(L10n.text("終了時の効果"), key: \.exit)
+            transitionPicker(L10n.text("開始時の効果"), key: \.entrance, custom: \.entranceEffect)
+            transitionPicker(L10n.text("終了時の効果"), key: \.exit, custom: \.exitEffect)
             Divider()
+            if !layer.usesEndpoints {
             Text(L10n.text("画面内の範囲（%）")).font(.caption).foregroundStyle(.secondary)
             HStack(spacing: 10) {
                 field(L10n.text("左"), value: percent(\.x))
@@ -37,6 +38,7 @@ struct LayerInspector: View {
             HStack(spacing: 10) {
                 field(L10n.text("幅"), value: percent(\.width))
                 field(L10n.text("高さ"), value: percent(\.height))
+            }
             }
             }
             if layer.kind == .text {
@@ -93,7 +95,7 @@ struct LayerInspector: View {
                 Toggle(L10n.text("影を付ける"), isOn: binding(\.shadow)).editorHover()
             } else if layer.kind == .rectangle {
                 if let effects = MovieExtensions.effects {
-                    effects.shapeInspector(parameters: binding(\.effectParameters), shape: binding(\.artworkID))
+                    effects.shapeInspector(parameters: Binding(get: { current.editableParameters }, set: { value in editor.updateLayer(layer.id) { $0.setEditableParameters(value) } }), shape: binding(\.artworkID))
                 }
                 colorPicker(L10n.text("塗りつぶし色"), key: \.rectangleColor, defaultColor: .rectangleDefault)
                 slider(L10n.text("不透明度"), value: Binding(
@@ -158,7 +160,17 @@ struct LayerInspector: View {
                 set: { value in editor.updateLayer(layer.id) { $0.region[keyPath: key] = Double(value) / 100 } })
     }
 
-    private func transitionPicker(_ title: String, key: WritableKeyPath<VisualLayer, Transition?>) -> some View {
+    @ViewBuilder private func transitionPicker(_ title: String, key: WritableKeyPath<VisualLayer, Transition?>, custom: WritableKeyPath<VisualLayer,String?>) -> some View {
+        if let effects = MovieExtensions.effects {
+            effects.transitionPicker(title, selection: Binding(get: {
+                current[keyPath: custom] ?? (current[keyPath: key] ?? .cut).rawValue
+            }, set: { id in editor.updateLayer(layer.id) {
+                let standard = Transition(rawValue: id)
+                $0[keyPath: custom] = standard == nil ? id : nil
+                $0[keyPath: key] = standard == .cut ? nil : standard ?? .dissolve
+                $0.animationSpan = nil
+            } }))
+        } else {
         HStack(spacing: 6) {
             Text(title).frame(width: 82, alignment: .leading)
             InspectorPopup(selection: Binding(
@@ -173,6 +185,7 @@ struct LayerInspector: View {
             .frame(width: width - 88, height: 25).editorHover()
         }
         .font(.caption)
+        }
     }
 
     private func field(_ label: String, value: Binding<Int>, fullWidth: Bool = false) -> some View {

@@ -338,16 +338,6 @@ struct EditorView: View {
     private var monitor: some View {
         VStack(spacing: 0) {
             HStack {
-                if let audio = MovieExtensions.audio {
-                    let start = editor.playhead, timeline = editor.timeline.id
-                    audio.controls(beginPlayback: {
-                        editor.seek(start)
-                        if !editor.playing && editor.timeline.hasContent { editor.togglePlayback() }
-                    }, stopPlayback: {
-                        if editor.playing { editor.togglePlayback() }
-                    }, register: { editor.importRecording($0, at: start, timeline: timeline) })
-                    .id(timeline)
-                }
                 Label(L10n.text("プレビュー"), systemImage: "play.rectangle").font(.caption.weight(.semibold)).lineLimit(1)
                 Spacer(minLength: 8)
                 Text("\(Int(editor.timeline.output.size.width)) × \(Int(editor.timeline.output.size.height))")
@@ -375,11 +365,11 @@ struct EditorView: View {
                 .overlay {
                     if let layer = editor.selectedLayer, layer.sound == nil, editor.previewError == nil, editor.timeline.hasContent,
                        !editor.playing {
-                        LayerRegionGuide(layer: layer, editor: editor).id(layer.id)
+                        if !layer.usesEndpoints { LayerRegionGuide(layer: layer, editor: editor).id(layer.id) }
                         if let shape = layer.artworkID, let effects = MovieExtensions.effects {
                             let canvas = CGSize(width:size.width*scale,height:size.height*scale)
-                            effects.guide(shape:shape, parameters:Binding(get:{ layer.effectParameters },set:{ value in editor.updateLayer(layer.id) { $0.effectParameters = value } }),
-                                          frame:layer.region.pixels(in:canvas), canvas:canvas)
+                            effects.guide(shape:shape, parameters:Binding(get:{ layer.editableParameters },set:{ value in editor.updateLayer(layer.id) { $0.setEditableParameters(value) } }),
+                                          frame:layer.usesEndpoints ? CGRect(origin:.zero,size:canvas) : layer.region.pixels(in:canvas), canvas:canvas)
                         }
                     } else if !editor.playing, let clip = editor.selectedClip, let effects = MovieExtensions.effects,
                               let source = editor.project.sources.first(where:{ $0.id == clip.sourceID }), let info = source.videoInfo,
@@ -416,14 +406,27 @@ struct EditorView: View {
                     }
                     .help(L10n.text("画像をコピー"))
                     .disabled(editor.copyingFrame)
-                    if let audio = MovieExtensions.audio { audio.monitorVolume(player: editor.player) }
                     FrameShareButton(editor: editor).frame(width: 30, height: 28).editorHoverBrightness()
+                    if let audio = MovieExtensions.audio { audio.monitorVolume(player: editor.player) }
                 }
                 .padding(.horizontal, 6)
             }
             .buttonStyle(HoverColorButtonStyle(color: accent, hoverColor: brightAccent))
             .disabled(!editor.timeline.hasContent || editor.previewError != nil)
             .frame(height: 82)
+            HStack {
+                Spacer()
+                if let audio = MovieExtensions.audio {
+                    let start = editor.playhead, timeline = editor.timeline.id
+                    audio.controls(beginPlayback: {
+                        editor.seek(start)
+                        if !editor.playing && editor.timeline.hasContent { editor.togglePlayback() }
+                    }, stopPlayback: {
+                        if editor.playing { editor.togglePlayback() }
+                    }, register: { editor.importRecording($0, at: start, timeline: timeline) })
+                    .id(timeline)
+                }
+            }.padding(.horizontal, 13).padding(.bottom, MovieExtensions.audio == nil ? 0 : 6)
         }
         .frame(maxWidth: .infinity)
     }

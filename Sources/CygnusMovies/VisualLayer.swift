@@ -122,6 +122,25 @@ struct VisualLayer: Identifiable, Codable, Equatable {
     var videoMuted: Bool?
     var fontFamily: String?
     var regularWeight: Bool?
+    var usesEndpoints: Bool { artworkID == "line" || artworkID == "arrow" }
+    // Older documents store endpoints relative to their layer bounds. Convert on edit.
+    var editableParameters: EffectParameters? {
+        guard usesEndpoints else { return effectParameters }
+        var result = effectParameters ?? EffectParameters()
+        for (key, origin, scale, fallback) in [("x1",region.x,region.width,0.0),("y1",region.y,region.height,0.0),
+                                               ("x2",region.x,region.width,1.0),("y2",region.y,region.height,1.0)] {
+            result.values[key] = origin + scale * (result.values[key] ?? fallback)
+        }
+        return result
+    }
+
+    mutating func setEditableParameters(_ value: EffectParameters?) {
+        effectParameters = value
+        if usesEndpoints { region = CanvasRegion(x:0,y:0,width:1,height:1) }
+    }
+
+    var entranceEffect: String?
+    var exitEffect: String?
     var entrance: Transition?
     var exit: Transition?
     var animationSpan: AnimationSpan?
