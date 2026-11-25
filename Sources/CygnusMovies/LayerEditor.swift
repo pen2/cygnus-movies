@@ -92,17 +92,31 @@ struct LayerInspector: View {
                     Spacer()
                     colorPicker(L10n.text("縁取り色"), key: \.outlineColor, defaultColor: .black)
                 }
-                Toggle(L10n.text("影を付ける"), isOn: binding(\.shadow)).editorHover()
+
             } else if layer.kind == .rectangle {
                 if let effects = MovieExtensions.effects {
                     effects.shapeInspector(parameters: Binding(get: { current.editableParameters }, set: { value in editor.updateLayer(layer.id) { $0.setEditableParameters(value) } }), shape: binding(\.artworkID))
                 }
-                colorPicker(L10n.text("塗りつぶし色"), key: \.rectangleColor, defaultColor: .rectangleDefault)
+                if !layer.usesEndpoints {
+                    colorPicker(L10n.text("塗りつぶし色"), key: \.rectangleColor, defaultColor: .rectangleDefault)
+                }
                 slider(L10n.text("不透明度"), value: Binding(
                     get: { current.rectangleOpacity ?? 1 },
                     set: { value in editor.updateLayer(layer.id) { $0.rectangleOpacity = value } }
                 ))
             } else if layer.kind == .image || layer.kind == .video {
+                if layer.sound == nil {
+                    DisclosureGroup(L10n.text("トリミング（%）")) {
+                        HStack {
+                            cropField("左", \.left, opposite: \.right)
+                            cropField("右", \.right, opposite: \.left)
+                        }
+                        HStack {
+                            cropField("上", \.top, opposite: \.bottom)
+                            cropField("下", \.bottom, opposite: \.top)
+                        }
+                    }
+                }
                 if let source = editor.project.sources.first(where: { $0.id == layer.sourceID }) {
                     Text(source.name).lineLimit(1).font(.caption)
                     if layer.sound == nil, let effects = MovieExtensions.effects {
@@ -130,7 +144,20 @@ struct LayerInspector: View {
             } else {
                 slider(L10n.text("強さ"), value: binding(\.intensity))
             }
+            if layer.sound == nil {
+                Toggle(L10n.text("影を付ける"), isOn: binding(\.shadow)).editorHover()
+            }
         }
+    }
+
+    private func cropField(_ title: String, _ key: WritableKeyPath<MediaCrop,Int>, opposite: KeyPath<MediaCrop,Int>) -> some View {
+        field(L10n.text(title), value: Binding(get: { current.mediaCrop?[keyPath: key] ?? 0 }, set: { value in
+            editor.updateLayer(layer.id) { layer in
+                var crop = layer.mediaCrop ?? MediaCrop()
+                crop[keyPath: key] = min(99 - crop[keyPath: opposite], max(0, value))
+                layer.mediaCrop = crop == MediaCrop() ? nil : crop
+            }
+        }))
     }
 
     private static let fontFamilies = NSFontManager.shared.availableFontFamilies

@@ -66,11 +66,31 @@ struct LayerColor: Codable, Equatable {
     let green: Double
     let blue: Double
 
+    static let preferenceKey = "shapeDefaultRGB"
+    static let defaultRGB = 0xffffff
+    static func fromRGB(_ value: Int) -> Self {
+        Self(red: Double((value >> 16) & 255) / 255, green: Double((value >> 8) & 255) / 255,
+             blue: Double(value & 255) / 255)
+    }
     static let white = LayerColor(red: 1, green: 1, blue: 1)
     static let black = LayerColor(red: 0, green: 0, blue: 0)
     static let rectangleDefault = LayerColor(red: 0.43, green: 0.85, blue: 0.81)
 
     var isValid: Bool { [red, green, blue].allSatisfy { (0...1).contains($0) } }
+}
+
+struct MediaCrop: Codable, Equatable {
+    var left = 0, right = 0, top = 0, bottom = 0
+    var isValid: Bool {
+        [left, right, top, bottom].allSatisfy { (0...99).contains($0) }
+            && left + right < 100 && top + bottom < 100
+    }
+    func rect(in extent: CGRect) -> CGRect {
+        CGRect(x: extent.minX + extent.width * Double(left) / 100,
+               y: extent.minY + extent.height * Double(bottom) / 100,
+               width: extent.width * Double(100 - left - right) / 100,
+               height: extent.height * Double(100 - top - bottom) / 100)
+    }
 }
 
 enum LayerTextAlignment: String, Codable, CaseIterable {
@@ -113,6 +133,7 @@ struct VisualLayer: Identifiable, Codable, Equatable {
     var textColor: LayerColor?
     var outlineColor: LayerColor?
     var rectangleColor: LayerColor?
+    var mediaCrop: MediaCrop?
     var rectangleOpacity: Double?
     var textAlignment: LayerTextAlignment?
     var shadow = false
@@ -169,7 +190,7 @@ struct VisualLayer: Identifiable, Codable, Equatable {
     var isValid: Bool {
         (sound.map { abs(Double($0.envelopeOffset)) <= 300_000_000 && (1...30_000_000).contains($0.envelopeLength) && (0...90).contains($0.fadeIn) && (0...90).contains($0.fadeOut) && (0...90).contains($0.overlapIn) && (0...90).contains($0.overlapOut) } ?? true)
             && start >= 0 && end > start && end <= Self.maximumEnd
-            && region.isValid && (0...1).contains(intensity)
+            && (mediaCrop?.isValid ?? true) && region.isValid && (0...1).contains(intensity)
             && (0.01...0.25).contains(textSize) && (0...0.2).contains(outline)
             && (fontSizePoints.map(Self.fontSizeRange.contains) ?? true)
             && (outlinePixels.map(Self.outlineRange.contains) ?? true)

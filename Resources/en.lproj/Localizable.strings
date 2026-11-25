@@ -379,3 +379,11 @@
 "動画レイヤーとして追加" = "Add as Video Layer";
 "ビデオ収録" = "Video Recording";
 "素材を読み込み中です。" = "Media import in progress.";
+
+"シェイプの初期色" = "Default shape color";
+
+"トリミング（%）" = "Crop (%)";
+
+"右" = "Right";
+
+"下" = "Bottom";

@@ -13,7 +13,7 @@ public protocol MovieEffects {
     func title(for shape: String) -> String
     @MainActor func clipInspector(parameters: Binding<EffectParameters?>, transition: Binding<String>, frames: Binding<Int>, maximum: Int, video: Bool) -> AnyView
     @MainActor func shapeInspector(parameters: Binding<EffectParameters?>, shape: Binding<String?>) -> AnyView
-    @MainActor func guide(shape: String?, parameters: Binding<EffectParameters?>, frame: CGRect, canvas: CGSize) -> AnyView
+    @MainActor func guide(shape: String?, parameters: Binding<EffectParameters?>, frame: CGRect, canvas: CGSize, scale: CGFloat) -> AnyView
     @MainActor func transitionPicker(_ title: String, selection: Binding<String>) -> AnyView
     func layerTransition(_ id: String, overlay: CIImage, progress: Double, bounds: CGRect) -> CIImage?
     @MainActor func mediaInspector(parameters: Binding<EffectParameters?>) -> AnyView

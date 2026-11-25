@@ -35,6 +35,10 @@ struct RenderedVisualLayer {
             .integral.intersection(bounds)
         guard !rect.isEmpty else { return image }
         let dimension = min(bounds.width, bounds.height)
+        func fitMedia(_ source: CIImage) -> CIImage {
+            let visible = layer.mediaCrop.map { source.cropped(to: $0.rect(in: source.extent)) } ?? source
+            return visible.positioned(in: rect)
+        }
         var result: CIImage
         switch layer.kind {
         case .blur:
@@ -47,14 +51,14 @@ struct RenderedVisualLayer {
             ])
         case .image:
             guard let artwork else { return image }
-            result = artwork.positioned(in: rect)
+            result = fitMedia(artwork)
         case .video:
             guard let videoFrame else { return image }
             let flip = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: videoFrame.extent.height)
             let oriented = videoFrame.transformed(by: flip.concatenating(videoTransform))
             let upright = oriented.transformed(by: CGAffineTransform(a: 1, b: 0, c: 0, d: -1,
                                                                      tx: 0, ty: oriented.extent.minY + oriented.extent.maxY))
-            result = upright.positioned(in: rect)
+            result = fitMedia(upright)
         case .rectangle:
             if layer.artworkID != nil, let artwork {
                 result = artwork.transformed(by: .init(scaleX: rect.width / artwork.extent.width, y: rect.height / artwork.extent.height)).transformed(by: .init(translationX: rect.minX, y: rect.minY))
@@ -74,18 +78,30 @@ struct RenderedVisualLayer {
         if layer.kind == .image || layer.kind == .video, let parameters = layer.effectParameters, let effects = MovieExtensions.effects {
             result = effects.decorateMedia(result, parameters: parameters)
         }
+        var effectBounds = rect
+        if layer.shadow && layer.kind != .text {
+            result = result.cropped(to: rect.intersection(result.extent))
+            let zero = CIVector(x: 0, y: 0, z: 0, w: 0)
+            let shade = result.applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": zero, "inputGVector": zero, "inputBVector": zero,
+                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.7)
+            ]).applyingGaussianBlur(sigma: dimension * 0.006)
+              .transformed(by: .init(translationX: dimension * 0.004, y: -dimension * 0.006))
+            effectBounds = rect.union(shade.extent).intersection(bounds)
+            result = result.composited(over: shade)
+        }
         let length = frameTime(layer.animationLength)
         let start = frameTime(layer.animationStart)
         let duration = min(0.3, length.seconds / 2)
         let elapsed = (time - start).seconds
         let remaining = (start + length - time).seconds
         if let transition = layer.entrance, transition != .cut, elapsed < duration {
-            return transitioned(result, over: image, in: rect, progress: elapsed / duration, transition: transition, custom: layer.entranceEffect)
+            return transitioned(result, over: image, in: effectBounds, progress: elapsed / duration, transition: transition, custom: layer.entranceEffect)
         }
         if let transition = layer.exit, transition != .cut, remaining < duration {
-            return transitioned(result, over: image, in: rect, progress: remaining / duration, transition: transition, custom: layer.exitEffect)
+            return transitioned(result, over: image, in: effectBounds, progress: remaining / duration, transition: transition, custom: layer.exitEffect)
         }
-        return result.cropped(to: rect).composited(over: image)
+        return result.cropped(to: effectBounds).composited(over: image)
     }
 
     private func transitioned(_ overlay: CIImage, over image: CIImage, in rect: CGRect,

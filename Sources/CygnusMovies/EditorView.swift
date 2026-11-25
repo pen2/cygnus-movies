@@ -376,7 +376,7 @@ struct EditorView: View {
                         if let shape = layer.artworkID, let effects = MovieExtensions.effects {
                             let canvas = CGSize(width:size.width*scale,height:size.height*scale)
                             effects.guide(shape:shape, parameters:Binding(get:{ layer.editableParameters },set:{ value in editor.updateLayer(layer.id) { $0.setEditableParameters(value) } }),
-                                          frame:layer.usesEndpoints ? CGRect(origin:.zero,size:canvas) : layer.region.pixels(in:canvas), canvas:canvas)
+                                          frame:layer.usesEndpoints ? CGRect(origin:.zero,size:canvas) : layer.region.pixels(in:canvas), canvas:canvas, scale:scale)
                         }
                     } else if !editor.playing, let clip = editor.selectedClip, let effects = MovieExtensions.effects,
                               let source = editor.project.sources.first(where:{ $0.id == clip.sourceID }), let info = source.videoInfo,
@@ -385,7 +385,7 @@ struct EditorView: View {
                         let factor = min(canvas.width/info.width,canvas.height/info.height)
                         let w = info.width*factor, h = info.height*factor
                         effects.guide(shape:nil,parameters:clipBinding(clip, \.effectParameters),
-                                      frame:CGRect(x:(canvas.width-w)/2,y:(canvas.height-h)/2,width:w,height:h),canvas:canvas)
+                                      frame:CGRect(x:(canvas.width-w)/2,y:(canvas.height-h)/2,width:w,height:h),canvas:canvas, scale:scale)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

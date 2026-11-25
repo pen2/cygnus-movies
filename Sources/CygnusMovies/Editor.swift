@@ -674,6 +674,15 @@ final class Editor: ObservableObject {
         }
         var layer = VisualLayer(kind: kind, start: start, end: start + length, region: region, sourceID: source?.id)
         layer.artworkID = artworkID
+        if kind == .rectangle {
+            let rgb = UserDefaults.standard.object(forKey: LayerColor.preferenceKey) as? Int ?? LayerColor.defaultRGB
+            layer.rectangleColor = .fromRGB(rgb)
+            if layer.usesEndpoints {
+                var parameters = EffectParameters()
+                parameters.values["strokeColor"] = Double(rgb)
+                layer.effectParameters = parameters
+            }
+        }
         if kind == .text {
             let canvas = timeline.output.size
             layer.outlinePixels = layer.strokePixels(in: canvas)
