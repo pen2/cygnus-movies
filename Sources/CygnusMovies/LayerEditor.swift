@@ -178,7 +178,7 @@ struct LayerInspector: View {
         return HStack(spacing: 6) {
             Text(L10n.text("フォント")).frame(width: 60, alignment: .leading)
             InspectorPopup(selection: binding(\.fontFamily), values: families,
-                           titles: families.map { $0 ?? L10n.text("システム標準") }, label: L10n.text("フォント"))
+                           titles: families.map { $0.map { FontFamilyNames.title($0, language: language) } ?? L10n.text("システム標準") }, label: L10n.text("フォント"))
                 .frame(width: width - 66, height: 25).editorHover()
         }
         .font(.caption)

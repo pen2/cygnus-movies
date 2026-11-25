@@ -277,7 +277,9 @@ struct EditorView: View {
         }
         .frame(maxHeight: .infinity)
         .background(surface)
+        .buttonStyle(HoverButtonStyle())
         .contextMenu { importActions }
+        .buttonStyle(.automatic)
         .sheet(isPresented: $showingCapture) {
             MovieExtensions.capture?.panel(register: editor.importCapturedMovie)
         }
@@ -1040,7 +1042,7 @@ struct InspectorPopup<Value: Hashable>: NSViewRepresentable {
     func updateNSView(_ button: NSPopUpButton, context: Context) {
         if button.itemTitles != titles {
             button.removeAllItems()
-            button.addItems(withTitles: titles)
+            for title in titles { button.menu?.addItem(withTitle: title, action: nil, keyEquivalent: "") }
         }
         button.selectItem(at: values.firstIndex(of: selection) ?? -1)
         button.isEnabled = isEnabled
