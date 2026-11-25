@@ -122,12 +122,14 @@ public struct Source: Identifiable, Codable, Equatable {
     var stillImage: Bool?
     var audioOnly: Bool?
     public var managed: Bool?
+    var capturedName: String?
     public var temporary: Bool?
     var videoInfo: SourceVideoInfo?
     var isImage: Bool { stillImage == true }
     static let maxImageFrames = 30 * 60 * 60
     var url: URL { URL(fileURLWithPath: path) }
     public var name: String {
+        if let capturedName { return capturedName }
         guard temporary == true else { return url.lastPathComponent }
         let title = isImage ? L10n.text("クリップボード画像") : L10n.text("クリップボード動画")
         return "\(title) \(id.uuidString.prefix(4))"

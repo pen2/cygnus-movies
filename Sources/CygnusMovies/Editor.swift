@@ -426,6 +426,17 @@ final class Editor: ObservableObject {
         } else { insertSound(source, timelineIndex: timelineIndex, start: placement.start, replacing: clip) }
     }
 
+    func importCapturedMovie(_ url: URL) async throws {
+        guard !loadingSources else { throw MovieError(L10n.text("素材を読み込み中です。")) }
+        loadingSources = true
+        defer { loadingSources = false }
+        let local = try temporaryMedia.destination(extension: "mov")
+        try await Task.detached { try FileManager.default.copyItem(at: url, to: local) }.value
+        let name = L10n.text("ビデオ収録") + " " + Date().formatted(date: .abbreviated, time: .standard)
+        let source = try await registerSource(local, temporary: true, capturedName: name)
+        selectSource(source.id)
+    }
+
     func importRecording(_ url: URL, at frame: Int, timeline target: UUID) {
         Task {
             do {
@@ -1037,7 +1048,7 @@ final class Editor: ObservableObject {
         }
     }
 
-    private func registerSource(_ url: URL, temporary: Bool = false) async throws -> Source {
+    private func registerSource(_ url: URL, temporary: Bool = false, capturedName: String? = nil) async throws -> Source {
         let generation = projectGeneration
         Edition.documents?.authorize(url)
         let url = url.standardizedFileURL
@@ -1056,6 +1067,7 @@ final class Editor: ObservableObject {
             return existing
         }
         var source = try await inspectSource(url)
+        source.capturedName = capturedName
         source.temporary = temporary ? true : nil
         if temporary { try await Edition.documents?.stage(source, id: recoveryID) }
         let firstVideo = !source.isImage && source.audioOnly != true && !project.sources.contains(where: { !$0.isImage && $0.audioOnly != true })

@@ -35,7 +35,7 @@ struct RenderedVisualLayer {
             .integral.intersection(bounds)
         guard !rect.isEmpty else { return image }
         let dimension = min(bounds.width, bounds.height)
-        let result: CIImage
+        var result: CIImage
         switch layer.kind {
         case .blur:
             let radius = dimension * (0.002 + 0.044 * layer.intensity)
@@ -70,6 +70,9 @@ struct RenderedVisualLayer {
                                               y: rect.height / artwork.extent.height)
                 .concatenating(.init(translationX: rect.minX, y: rect.minY))
             result = artwork.transformed(by: transform)
+        }
+        if layer.kind == .image || layer.kind == .video, let parameters = layer.effectParameters, let effects = MovieExtensions.effects {
+            result = effects.decorateMedia(result, parameters: parameters)
         }
         let length = frameTime(layer.animationLength)
         let start = frameTime(layer.animationStart)

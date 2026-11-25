@@ -105,6 +105,9 @@ struct LayerInspector: View {
             } else if layer.kind == .image || layer.kind == .video {
                 if let source = editor.project.sources.first(where: { $0.id == layer.sourceID }) {
                     Text(source.name).lineLimit(1).font(.caption)
+                    if layer.sound == nil, let effects = MovieExtensions.effects {
+                        effects.mediaInspector(parameters: binding(\.effectParameters))
+                    }
                     if layer.kind == .video {
                         if layer.sound == nil { field(L10n.text("素材の開始"), value: Binding(get: { current.videoSourceStart ?? 0 }, set: { value in
                             editor.updateLayer(layer.id) {

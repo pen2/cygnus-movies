@@ -376,3 +376,6 @@
 "音声を差し替え" = "Replace Audio";
 "音声トラックがありません。" = "This clip has no audio track.";
 "保存済み" = "Saved";
+"動画レイヤーとして追加" = "Add as Video Layer";
+"ビデオ収録" = "Video Recording";
+"素材を読み込み中です。" = "Media import in progress.";

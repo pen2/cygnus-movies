@@ -49,7 +49,7 @@ struct EditorView: View {
         let _ = language
 
         GeometryReader { geometry in
-            let base: CGFloat = (showWaveform ? 260 : 220) + (geometry.size.width < 1250 ? 38 : 0)
+            let base: CGFloat = (showWaveform ? 260 : 220) + (geometry.size.width < (MovieExtensions.audio == nil ? 1250 : 1490) ? 38 : 0)
             let row = TimelineTrack.layerRowHeight
             let available = max(1, Int((geometry.size.height - 55 - 180 - base) / row))
             let inspectorWidth: CGFloat = 288
@@ -235,6 +235,10 @@ struct EditorView: View {
             .help(L10n.text("画像・動画を一時素材として追加（終了時に破棄・保存対象外）"))
             .padding(.horizontal, 11).padding(.bottom, 8)
 
+            if let capture = MovieExtensions.capture {
+                capture.controls(register: editor.importCapturedMovie)
+                    .font(.caption).padding(.horizontal, 11).padding(.bottom, 8)
+            }
             if editor.librarySources.isEmpty {
                 Spacer()
                 VStack(spacing: 8) {
@@ -322,6 +326,9 @@ struct EditorView: View {
             Button(L10n.text("新しいタイムラインに追加")) { editor.addTimeline(with: source) }.disabled(missing)
             if source.isImage {
                 Button(L10n.text("画像レイヤーとして追加")) { editor.addLayer(.image, source: source) }
+                    .disabled(missing)
+            } else if source.audioOnly != true {
+                Button(L10n.text("動画レイヤーとして追加")) { editor.addLayer(.video, source: source, duration: source.frames) }
                     .disabled(missing)
             }
             Divider()
@@ -414,19 +421,7 @@ struct EditorView: View {
             .buttonStyle(HoverColorButtonStyle(color: accent, hoverColor: brightAccent))
             .disabled(!editor.timeline.hasContent || editor.previewError != nil)
             .frame(height: 82)
-            HStack {
-                Spacer()
-                if let audio = MovieExtensions.audio {
-                    let start = editor.playhead, timeline = editor.timeline.id
-                    audio.controls(beginPlayback: {
-                        editor.seek(start)
-                        if !editor.playing && editor.timeline.hasContent { editor.togglePlayback() }
-                    }, stopPlayback: {
-                        if editor.playing { editor.togglePlayback() }
-                    }, register: { editor.importRecording($0, at: start, timeline: timeline) })
-                    .id(timeline)
-                }
-            }.padding(.horizontal, 13).padding(.bottom, MovieExtensions.audio == nil ? 0 : 6)
+
         }
         .frame(maxWidth: .infinity)
     }
@@ -668,7 +663,7 @@ struct EditorView: View {
     }
 
     private func timelineArea(layerHeight: CGFloat, viewportWidth: CGFloat) -> some View {
-        let compact = viewportWidth < 1250
+        let compact = viewportWidth < (MovieExtensions.audio == nil ? 1250 : 1490)
         let controls = compact ? AnyLayout(VStackLayout(spacing: 3)) : AnyLayout(HStackLayout(spacing: 10))
         return VStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -751,6 +746,16 @@ struct EditorView: View {
                     }
                     .fixedSize()
                     .editorHover()
+                    if let audio = MovieExtensions.audio {
+                        let start = editor.playhead, timeline = editor.timeline.id
+                        audio.controls(beginPlayback: {
+                            editor.seek(start)
+                            if !editor.playing && editor.timeline.hasContent { editor.togglePlayback() }
+                        }, stopPlayback: {
+                            if editor.playing { editor.togglePlayback() }
+                        }, register: { editor.importRecording($0, at: start, timeline: timeline) })
+                        .id(timeline)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: 10) {

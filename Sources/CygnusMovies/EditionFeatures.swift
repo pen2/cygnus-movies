@@ -16,6 +16,8 @@ public protocol MovieEffects {
     @MainActor func guide(shape: String?, parameters: Binding<EffectParameters?>, frame: CGRect, canvas: CGSize) -> AnyView
     @MainActor func transitionPicker(_ title: String, selection: Binding<String>) -> AnyView
     func layerTransition(_ id: String, overlay: CIImage, progress: Double, bounds: CGRect) -> CIImage?
+    @MainActor func mediaInspector(parameters: Binding<EffectParameters?>) -> AnyView
+    func decorateMedia(_ image: CIImage, parameters: EffectParameters) -> CIImage
     func artwork(shape: String, parameters: EffectParameters?, size: CGSize, fill: CGColor) -> CGImage?
     func foreground(_ image: CIImage, parameters: EffectParameters, canvas: CGRect) -> CIImage
     func transition(_ id: String, from: CIImage, to: CIImage, progress: Double, bounds: CGRect) -> CIImage?
@@ -32,6 +34,7 @@ public protocol ExportController {
 
 /// Set by the application entry point before any rendering starts.
 public enum MovieExtensions {
+    public static var capture: MovieCapture?
     public static var effects: MovieEffects?
     public static var exports: ExportController?
 }
@@ -70,4 +73,8 @@ public protocol AudioEditing {
 
 public extension MovieExtensions {
     static var audio: AudioEditing?
+}
+
+public protocol MovieCapture {
+    @MainActor func controls(register: @escaping @MainActor (URL) async throws -> Void) -> AnyView
 }
