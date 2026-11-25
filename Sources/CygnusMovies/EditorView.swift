@@ -278,8 +278,7 @@ struct EditorView: View {
         .frame(maxHeight: .infinity)
         .background(surface)
         .buttonStyle(HoverButtonStyle())
-        .contextMenu { importActions }
-        .buttonStyle(.automatic)
+        .editorContextMenu { importActions }
         .sheet(isPresented: $showingCapture) {
             MovieExtensions.capture?.panel(register: editor.importCapturedMovie)
         }
@@ -338,7 +337,7 @@ struct EditorView: View {
         }
         .onTapGesture { editor.selectSource(source.id) }
         .draggable(TimelineDrag(payload: "source:\(source.id.uuidString)"))
-        .contextMenu {
+        .editorContextMenu {
             Button(L10n.text("このタイムラインに追加")) { editor.addClip(source) }.disabled(missing)
             let otherTimelines = editor.project.timelines.filter { $0.id != editor.timeline.id }
             if !otherTimelines.isEmpty {
@@ -365,7 +364,6 @@ struct EditorView: View {
             Divider()
             Button(L10n.text("素材一覧から取り除く")) { editor.removeSource(source) }
         }
-        .buttonStyle(.automatic)
         .help(source.path)
     }
 
@@ -918,7 +916,7 @@ struct EditorView: View {
             timelineTabFrames[timeline.id] = $0
         }
         .onDisappear { timelineTabFrames[timeline.id] = nil }
-        .contextMenu {
+        .editorContextMenu {
             Button(L10n.text("名前を変更…")) { requestTimelineRename(timeline) }
             Button(L10n.text("このタイムラインを書き出す…")) { editor.startExport(all: false, for: timeline.id) }
                 .disabled(!timeline.hasContent || editor.exporting)
@@ -926,7 +924,6 @@ struct EditorView: View {
             Button(L10n.text("タイムラインを削除…"), role: .destructive) { requestTimelineRemoval(timeline) }
                 .disabled(editor.project.timelines.count == 1)
         }
-        .buttonStyle(.automatic)
     }
 
     private func requestTimelineRename(_ timeline: Timeline) {

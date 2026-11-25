@@ -10,6 +10,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "CygnusMoviesCore", path: "Sources/CygnusMovies"),
-        .executableTarget(name: "CygnusMovies", dependencies: ["CygnusMoviesCore"], path: "Sources/Free")
+        .executableTarget(name: "CygnusMovies", dependencies: ["CygnusMoviesCore"], path: "Sources/Free"),
+        .testTarget(name: "MenuTests", path: "Tests/MenuTests")
     ]
 )

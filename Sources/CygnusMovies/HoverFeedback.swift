@@ -29,6 +29,13 @@ struct HoverColorButtonStyle: ButtonStyle {
 }
 
 extension View {
+    // Menu items must use AppKit's native highlighting. The editor's hover-style
+    // buttons can otherwise become custom menu rows that change height on hover.
+    func editorContextMenu<Items: View>(@ViewBuilder items: () -> Items) -> some View {
+        self.contextMenu(menuItems: items)
+            .buttonStyle(.automatic)
+    }
+
     func editorHover(radius: CGFloat = 5) -> some View {
         modifier(HoverFeedback(radius: radius))
     }

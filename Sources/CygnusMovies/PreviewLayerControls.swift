@@ -43,7 +43,7 @@ struct PreviewLayerControls: View {
                             editor.selectLayer(layer.id)
                         }
                     })
-                    .contextMenu { LayerActions(editor: editor, layer: layer) }
+                    .editorContextMenu { LayerActions(editor: editor, layer: layer) }
                 }
             }
             if let layer = editor.selectedLayer, layer.sound == nil, editor.editingTextID != layer.id,

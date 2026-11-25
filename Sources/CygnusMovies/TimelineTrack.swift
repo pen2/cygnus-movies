@@ -527,7 +527,7 @@ private struct ClipBlock: View {
             if let trailingTrim { TimelineDragLine(snapped: trailingTrim.snapped, height: 64) }
         }
         .offset(x: Double(leadingDelta) * pointsPerFrame)
-        .contextMenu {
+        .editorContextMenu {
             Button(L10n.text("クリップの先頭へ移動")) {
                 editor.selectClip(clip.id)
                 editor.seek(placement.start)
@@ -538,7 +538,6 @@ private struct ClipBlock: View {
             Button(selected && editor.selections.count > 1 ? L10n.text("選択した項目を削除") : L10n.text("クリップを削除"),
                    role: .destructive) { editor.removeClip(clip.id) }
         }
-        .buttonStyle(.automatic)
         .help(editor.name(of: clip))
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { editor.selectClip(clip.id) }
@@ -642,10 +641,9 @@ private struct LayerBlock: View {
         }
         .simultaneousGesture(TapGesture(count: 2).onEnded { editor.beginInlineEditing(layer.id) })
         .offset(x: Double(startDelta) * pointsPerFrame)
-        .contextMenu {
+        .editorContextMenu {
             LayerActions(editor: editor, layer: layer)
         }
-        .buttonStyle(.automatic)
         .help(layerTitle + "  " + timecode(layer.start) + " – " + timecode(layer.end))
         .accessibilityLabel(layerTitle)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
