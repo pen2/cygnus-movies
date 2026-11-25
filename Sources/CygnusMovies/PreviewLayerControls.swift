@@ -41,8 +41,13 @@ struct PreviewLayerControls: View {
                             }
                         }
                         .contentShape(interactionPath(path, layer: layer, box: box, selected: selected))
-                        .simultaneousGesture(TapGesture(count: 2).onEnded { editor.beginInlineEditing(layer.id) })
-                        .simultaneousGesture(TapGesture().onEnded { editor.selectLayer(layer.id) })
+                        .simultaneousGesture(TapGesture(count: 2).exclusively(before: TapGesture()).onEnded { tap in
+                            if case .first = tap, layer.kind == .text {
+                                editor.beginInlineEditing(layer.id)
+                            } else {
+                                editor.selectLayer(layer.id)
+                            }
+                        })
                         .contextMenu { LayerActions(editor: editor, layer: layer) }
                     }
                 }
