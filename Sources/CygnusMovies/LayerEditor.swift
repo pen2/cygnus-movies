@@ -162,9 +162,17 @@ struct LayerInspector: View {
 
     private static let fontFamilies = NSFontManager.shared.availableFontFamilies
 
+    private static let japaneseFirst: [String] = {
+        let japanese = Set(fontFamilies.filter { family in
+            let font = CTFontCreateWithName(family as CFString, 14, nil)
+            return (CTFontCopySupportedLanguages(font) as? [String])?.contains("ja") == true
+        })
+        return fontFamilies.filter(japanese.contains) + fontFamilies.filter { !japanese.contains($0) }
+    }()
+
     private var fontPicker: some View {
         let chosen = current.fontFamily
-        let available = Self.fontFamilies
+        let available = language.resolved == .japanese ? Self.japaneseFirst : Self.fontFamilies
         let families = [nil as String?] + available.map(Optional.some)
             + (chosen.map { available.contains($0) ? [] : [Optional.some($0)] } ?? [])
         return HStack(spacing: 6) {

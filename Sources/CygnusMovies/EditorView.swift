@@ -12,6 +12,7 @@ struct EditorView: View {
 
     @ObservedObject var editor: Editor
     var openFiles: (([URL]) -> Void)? = nil
+    @State private var showingCapture = false
     @State private var removeTimeline = false
     @State private var timelineRemovalTarget: Timeline?
     @AppStorage(TimelinePreferences.zoom) private var zoom = 0.56
@@ -102,6 +103,7 @@ struct EditorView: View {
         .background(EditorShortcuts(editor: editor).frame(width: 0, height: 0))
         .background(WindowTitleBridge(title: editor.windowTitle).frame(width: 0, height: 0))
         .onChange(of: editor.selection) { selection in
+            if selection != editor.editingTextID.map(Editor.Selection.layer) { editor.editingTextID = nil }
             switch selection {
             case .clip, .layer: inspectorTab = .selection
             case .source, nil: inspectorTab = .timeline
@@ -219,8 +221,8 @@ struct EditorView: View {
                 if editor.loadingSources { ProgressView().controlSize(.small) }
                 Button {
                     if let source = editor.selectedSource { editor.removeSource(source) }
-                } label: { Image(systemName: "minus") }
-                    .buttonStyle(HoverColorButtonStyle(color: accent, hoverColor: .orange, bordered: true))
+                } label: { Image(systemName: "trash") }
+                    .buttonStyle(HoverColorButtonStyle(color: accent, hoverColor: .red, bordered: true))
                     .help(L10n.text("素材一覧から取り除く")).disabled(editor.selectedSource == nil)
                 Button(action: editor.chooseSources) { Image(systemName: "plus") }
                     .help(L10n.text("素材を読み込む")).disabled(editor.loadingSources)
@@ -228,15 +230,15 @@ struct EditorView: View {
             .padding(13)
 
             Button { editor.pasteTemporaryMedia() } label: {
-                Label(L10n.text("クリップボードから一時追加"), systemImage: "clipboard")
+                Label(L10n.text("クリップボードから読み込む"), systemImage: "clipboard")
             }
             .font(.caption)
             .disabled(editor.loadingSources)
-            .help(L10n.text("画像・動画を一時素材として追加（終了時に破棄・保存対象外）"))
+            .help(L10n.text(Edition.documents == nil ? "画像・動画を一時素材として追加（終了時に破棄・保存対象外）" : "次回保存時に保存"))
             .padding(.horizontal, 11).padding(.bottom, 8)
 
-            if let capture = MovieExtensions.capture {
-                capture.controls(register: editor.importCapturedMovie)
+            if MovieExtensions.capture != nil {
+                Button { showingCapture = true } label: { Label(L10n.text("ビデオ収録して読み込む"), systemImage: "video") }
                     .font(.caption).padding(.horizontal, 11).padding(.bottom, 8)
             }
             if editor.librarySources.isEmpty {
@@ -258,10 +260,15 @@ struct EditorView: View {
                     .padding(.horizontal, 9)
                 }
                 .safeAreaInset(edge: .bottom) {
+                    VStack {
+                    Button {
+                        if let source = editor.selectedSource { addSourceLayer(source) }
+                    } label: { Label(L10n.text("レイヤーとして追加"), systemImage: "square.3.layers.3d") }
                     Button {
                         if let source = editor.selectedSource { editor.addClip(source) }
                     } label: {
                         Label(L10n.text("タイムラインに追加"), systemImage: "plus.circle")
+                    }
                     }
                     .disabled(editor.selectedSource == nil)
                     .padding(11)
@@ -270,9 +277,26 @@ struct EditorView: View {
         }
         .frame(maxHeight: .infinity)
         .background(surface)
+        .contextMenu { importActions }
+        .sheet(isPresented: $showingCapture) {
+            MovieExtensions.capture?.panel(register: editor.importCapturedMovie)
+        }
         .dropDestination(for: URL.self) { urls, _ in
             receiveFiles(urls)
         }
+    }
+
+    @ViewBuilder private var importActions: some View {
+        Button(L10n.text("素材を読み込む…"), action: editor.chooseSources)
+        Button(L10n.text("クリップボードから読み込む"), action: { editor.pasteTemporaryMedia() })
+        if MovieExtensions.capture != nil {
+            Button(L10n.text("ビデオ収録して読み込む")) { showingCapture = true }
+        }
+    }
+
+    private func addSourceLayer(_ source: Source) {
+        if source.audioOnly == true { editor.addClip(source) }
+        else { editor.addLayer(source.isImage ? .image : .video, source: source, duration: source.isImage ? 180 : source.frames) }
     }
 
     private func receiveFiles(_ urls: [URL]) -> Bool {
@@ -332,6 +356,7 @@ struct EditorView: View {
                     .disabled(missing)
             }
             Divider()
+            Menu(L10n.text("素材を読み込む")) { importActions }
             Button(L10n.text("Finderで元ファイルを表示")) { NSWorkspace.shared.activateFileViewerSelecting([source.url]) }
                 .disabled(missing)
             Button(L10n.text("元ファイルを再指定…")) { editor.relink(source) }.disabled(editor.loadingSources)
@@ -370,15 +395,10 @@ struct EditorView: View {
                 }
                 .frame(width: size.width * scale, height: size.height * scale)
                 .overlay {
-                    if let layer = editor.selectedLayer, layer.sound == nil, editor.previewError == nil, editor.timeline.hasContent,
-                       !editor.playing {
-                        if !layer.usesEndpoints { LayerRegionGuide(layer: layer, editor: editor).id(layer.id) }
-                        if let shape = layer.artworkID, let effects = MovieExtensions.effects {
-                            let canvas = CGSize(width:size.width*scale,height:size.height*scale)
-                            effects.guide(shape:shape, parameters:Binding(get:{ layer.editableParameters },set:{ value in editor.updateLayer(layer.id) { $0.setEditableParameters(value) } }),
-                                          frame:layer.usesEndpoints ? CGRect(origin:.zero,size:canvas) : layer.region.pixels(in:canvas), canvas:canvas, scale:scale)
-                        }
-                    } else if !editor.playing, let clip = editor.selectedClip, let effects = MovieExtensions.effects,
+                    if !editor.playing, editor.previewError == nil {
+                        PreviewLayerControls(editor: editor, canvas: CGSize(width: size.width * scale, height: size.height * scale), scale: scale)
+                    }
+                    if !editor.playing, let clip = editor.selectedClip, let effects = MovieExtensions.effects,
                               let source = editor.project.sources.first(where:{ $0.id == clip.sourceID }), let info = source.videoInfo,
                               let placement = editor.placements.first(where: { $0.clip.id == clip.id }), (placement.start..<placement.end).contains(editor.playhead) {
                         let canvas = CGSize(width:size.width*scale,height:size.height*scale)

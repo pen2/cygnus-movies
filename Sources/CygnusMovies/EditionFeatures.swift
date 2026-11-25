@@ -9,6 +9,7 @@ public struct EffectParameters: Codable, Equatable {
 
 public protocol MovieEffects {
     var shapes: [(id: String, title: String)] { get }
+    @MainActor func hitPath(shape: String, parameters: EffectParameters?, rect: CGRect, scale: CGFloat) -> Path
     func symbol(for shape: String) -> String
     func title(for shape: String) -> String
     @MainActor func clipInspector(parameters: Binding<EffectParameters?>, transition: Binding<String>, frames: Binding<Int>, maximum: Int, video: Bool) -> AnyView
@@ -76,5 +77,5 @@ public extension MovieExtensions {
 }
 
 public protocol MovieCapture {
-    @MainActor func controls(register: @escaping @MainActor (URL) async throws -> Void) -> AnyView
+    @MainActor func panel(register: @escaping @MainActor (URL) async throws -> Void) -> AnyView
 }

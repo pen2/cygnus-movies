@@ -640,21 +640,10 @@ private struct LayerBlock: View {
                     .offset(x: Double(guide.guide - start) * pointsPerFrame - 1, y: -2)
             }
         }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { editor.beginInlineEditing(layer.id) })
         .offset(x: Double(startDelta) * pointsPerFrame)
         .contextMenu {
-            Button(L10n.text("レイヤーの先頭へ移動")) {
-                editor.selectLayer(layer.id)
-                editor.seek(layer.start)
-            }
-            Button(L10n.text("レイヤーを複製")) { editor.duplicateLayer(layer.id) }
-            TimelineTransferMenus(editor: editor, item: .layer(layer.id))
-            Button(L10n.text("前面へ移動")) { editor.reorderLayer(by: 1, id: layer.id) }
-                .disabled(!editor.canReorderLayer(by: 1, id: layer.id))
-            Button(L10n.text("背面へ移動")) { editor.reorderLayer(by: -1, id: layer.id) }
-                .disabled(!editor.canReorderLayer(by: -1, id: layer.id))
-            Divider()
-            Button(selected && editor.selections.count > 1 ? L10n.text("選択した項目を削除") : L10n.text("レイヤーを削除"),
-                   role: .destructive) { editor.removeLayer(layer.id) }
+            LayerActions(editor: editor, layer: layer)
         }
         .buttonStyle(.automatic)
         .help(layerTitle + "  " + timecode(layer.start) + " – " + timecode(layer.end))
@@ -808,5 +797,30 @@ private struct TrimGrip: View {
             .onDisappear {
                 if enabled && hovering { NSCursor.arrow.set() }
             }
+    }
+}
+
+struct LayerActions: View {
+    @ObservedObject var editor: Editor
+    let layer: VisualLayer
+    var body: some View {
+        let selected = editor.selections.contains(.layer(layer.id))
+            Button(L10n.text("レイヤーの先頭へ移動")) {
+                editor.selectLayer(layer.id)
+                editor.seek(layer.start)
+            }
+            Button(L10n.text("レイヤーを複製")) { editor.duplicateLayer(layer.id) }
+            TimelineTransferMenus(editor: editor, item: .layer(layer.id))
+            Button(L10n.text("前面へ移動")) { editor.reorderLayer(by: 1, id: layer.id) }
+                .disabled(!editor.canReorderLayer(by: 1, id: layer.id))
+            Button(L10n.text("背面へ移動")) { editor.reorderLayer(by: -1, id: layer.id) }
+                .disabled(!editor.canReorderLayer(by: -1, id: layer.id))
+            let index = editor.timeline.layers.firstIndex { $0.id == layer.id } ?? 0
+            let front = editor.timeline.layers.count - 1 - index
+            Button(L10n.text("最前面へ移動")) { editor.reorderLayer(by: front, id: layer.id) }.disabled(front <= 0)
+            Button(L10n.text("最背面へ移動")) { editor.reorderLayer(by: -index, id: layer.id) }.disabled(index == 0)
+            Divider()
+            Button(selected && editor.selections.count > 1 ? L10n.text("選択した項目を削除") : L10n.text("レイヤーを削除"),
+                   role: .destructive) { editor.removeLayer(layer.id) }
     }
 }

@@ -708,6 +708,14 @@ final class Editor: ObservableObject {
         }
     }
 
+    @Published var editingTextID: UUID?
+    func beginInlineEditing(_ id: UUID) {
+        guard timeline.layers.contains(where: { $0.id == id && $0.kind == .text }) else { return }
+        if playing { togglePlayback() }
+        selectLayer(id)
+        editingTextID = id
+    }
+
     func selectLayer(_ id: UUID, extending: Bool = false) {
         guard let layer = timeline.layers.first(where: { $0.id == id }) else { return }
         selectItem(.layer(id), extending: extending)
@@ -762,7 +770,10 @@ final class Editor: ObservableObject {
         let layers = timeline.layers
         guard let id = id ?? layerID, let index = layers.firstIndex(where: { $0.id == id }),
               layers.indices.contains(index + step) else { return }
-        updateTimeline { $0.layers.swapAt(index, index + step) }
+        updateTimeline { timeline in
+            let layer = timeline.layers.remove(at: index)
+            timeline.layers.insert(layer, at: index + step)
+        }
     }
 
     func updateClip(_ id: UUID, _ change: (inout Clip) -> Void) {
