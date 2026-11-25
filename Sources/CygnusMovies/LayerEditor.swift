@@ -326,8 +326,11 @@ struct LayerRegionGuide: View {
 
     let layer: VisualLayer
     let editor: Editor
-    @GestureState private var moving = CGSize.zero
-    @GestureState private var resizing = CGSize.zero
+    let handles: Bool
+    let moveGesture: GestureState<CGSize>
+    private var moving: CGSize { moveGesture.wrappedValue }
+    let resizeGesture: GestureState<CGSize>
+    private var resizing: CGSize { resizeGesture.wrappedValue }
 
     var body: some View {
         let _ = language
@@ -338,35 +341,43 @@ struct LayerRegionGuide: View {
             let box = region.pixels(in: size)
             if size.width > 0 && size.height > 0 {
                 ZStack(alignment: .topLeading) {
-                    Rectangle()
-                        .strokeBorder(.mint, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-                        .contentShape(Rectangle())
-                        .frame(width: box.width, height: box.height)
-                        .editorHover(radius: 0)
-                        .offset(x: box.minX, y: box.minY)
-                        .gesture(
-                            DragGesture(coordinateSpace: .global)
-                                .updating($moving) { value, state, _ in state = value.translation }
-                                .onChanged { value in
-                                    editor.previewLayerRegion(layer.id, region: adjusted(by: value.translation, sizing: .zero, in: size))
-                                }
-                                .onEnded { value in commit(adjusted(by: value.translation, sizing: .zero, in: size)) }
-                        )
-                    Circle()
-                        .fill(.mint)
-                        .frame(width: 10, height: 10)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                        .editorHover(radius: 10)
-                        .position(x: box.maxX, y: box.maxY)
-                        .gesture(
-                            DragGesture(coordinateSpace: .global)
-                                .updating($resizing) { value, state, _ in state = value.translation }
-                                .onChanged { value in
-                                    editor.previewLayerRegion(layer.id, region: adjusted(by: .zero, sizing: value.translation, in: size))
-                                }
-                                .onEnded { value in commit(adjusted(by: .zero, sizing: value.translation, in: size)) }
-                        )
+                    if handles {
+                        Rectangle()
+                            .strokeBorder(.mint, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                            .frame(width: box.width, height: box.height)
+                            .offset(x: box.minX, y: box.minY)
+                            .allowsHitTesting(false)
+                        Circle()
+                            .fill(.mint)
+                            .frame(width: 10, height: 10)
+                            .frame(width: 20, height: 20)
+                            .contentShape(Rectangle())
+                            .editorHover(radius: 10)
+                            .position(x: box.maxX, y: box.maxY)
+                            .gesture(
+                                DragGesture(coordinateSpace: .global)
+                                    .updating(resizeGesture) { value, state, _ in state = value.translation }
+                                    .onChanged { value in
+                                        editor.previewLayerRegion(layer.id, region: adjusted(by: .zero, sizing: value.translation, in: size))
+                                    }
+                                    .onEnded { value in commit(adjusted(by: .zero, sizing: value.translation, in: size)) }
+                            )
+                    } else {
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .frame(width: box.width, height: box.height)
+                            .editorHover(radius: 0)
+                            .offset(x: box.minX, y: box.minY)
+                            .gesture(
+                                DragGesture(coordinateSpace: .global)
+                                    .updating(moveGesture) { value, state, _ in state = value.translation }
+                                    .onChanged { value in
+                                        editor.previewLayerRegion(layer.id, region: adjusted(by: value.translation, sizing: .zero, in: size))
+                                    }
+                                    .onEnded { value in commit(adjusted(by: value.translation, sizing: .zero, in: size)) }
+                            )
+                    }
                 }
                 .help(L10n.text("枠をドラッグして移動、右下の丸でサイズを変更"))
             }

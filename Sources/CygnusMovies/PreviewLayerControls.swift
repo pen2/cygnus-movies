@@ -7,6 +7,9 @@ struct PreviewLayerControls: View {
 
     @State private var hoverID: UUID?
 
+    @GestureState private var moving = CGSize.zero
+    @GestureState private var resizing = CGSize.zero
+
     var body: some View {
         let frame = min(editor.playhead, max(0, editor.totalFrames - 1))
         ZStack(alignment: .topLeading) {
@@ -29,17 +32,10 @@ struct PreviewLayerControls: View {
                                 else if hoverID == layer.id { hoverID = nil }
                             }
                         if selected {
-                            if layer.usesEndpoints, let effects = MovieExtensions.effects {
-                                effects.guide(shape: layer.artworkID, parameters: Binding(
-                                    get: { layer.editableParameters },
-                                    set: { value in editor.updateLayer(layer.id) { $0.setEditableParameters(value) } }
-                                ), frame: CGRect(origin: .zero, size: canvas), canvas: canvas, scale: scale)
-                            } else {
-                                LayerRegionGuide(layer: layer, editor: editor)
-                            }
+                            guide(for: layer, handles: false)
                         }
                     }
-                    .contentShape(interactionPath(path, layer: layer, box: box, selected: selected))
+                    .contentShape(path)
                     .simultaneousGesture(TapGesture(count: 2).exclusively(before: TapGesture()).onEnded { tap in
                         if case .first = tap, layer.kind == .text {
                             editor.beginInlineEditing(layer.id)
@@ -49,6 +45,12 @@ struct PreviewLayerControls: View {
                     })
                     .contextMenu { LayerActions(editor: editor, layer: layer) }
                 }
+            }
+            if let layer = editor.selectedLayer, layer.sound == nil, editor.editingTextID != layer.id,
+               (layer.start..<layer.end).contains(frame) {
+                guide(for: layer, handles: true)
+                    .id(layer.id)
+                    .zIndex(2)
             }
         }
         .frame(width: canvas.width, height: canvas.height, alignment: .topLeading)
@@ -61,19 +63,15 @@ struct PreviewLayerControls: View {
         return Path(box)
     }
 
-    private func interactionPath(_ path: Path, layer: VisualLayer, box: CGRect, selected: Bool) -> Path {
-        guard selected else { return path }
-        var region = path
-        if layer.usesEndpoints {
-            let values = layer.editableParameters?.values ?? [:]
-            for (x, y, fallback) in [("x1", "y1", 0.0), ("x2", "y2", 1.0)] {
-                region.addRect(CGRect(x: (values[x] ?? fallback) * canvas.width - 12,
-                                      y: (values[y] ?? fallback) * canvas.height - 12, width: 24, height: 24))
-            }
+    @ViewBuilder private func guide(for layer: VisualLayer, handles: Bool) -> some View {
+        if layer.usesEndpoints, let effects = MovieExtensions.effects {
+            effects.guide(shape: layer.artworkID, parameters: Binding(
+                get: { layer.editableParameters },
+                set: { value in editor.updateLayer(layer.id) { $0.setEditableParameters(value) } }
+            ), frame: CGRect(origin: .zero, size: canvas), canvas: canvas, scale: scale, handles: handles)
         } else {
-            region.addRect(CGRect(x: box.maxX - 10, y: box.maxY - 10, width: 20, height: 20))
+            LayerRegionGuide(layer: layer, editor: editor, handles: handles, moveGesture: $moving, resizeGesture: $resizing)
         }
-        return region
     }
 }
 

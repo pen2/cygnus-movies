@@ -407,7 +407,7 @@ struct EditorView: View {
                         let factor = min(canvas.width/info.width,canvas.height/info.height)
                         let w = info.width*factor, h = info.height*factor
                         effects.guide(shape:nil,parameters:clipBinding(clip, \.effectParameters),
-                                      frame:CGRect(x:(canvas.width-w)/2,y:(canvas.height-h)/2,width:w,height:h),canvas:canvas, scale:scale)
+                                      frame:CGRect(x:(canvas.width-w)/2,y:(canvas.height-h)/2,width:w,height:h),canvas:canvas, scale:scale, handles:true)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
