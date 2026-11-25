@@ -8,7 +8,7 @@
 
 **[最新版をダウンロードする（配布ページ）](https://github.com/pen2/cygnus-movies/releases/latest)**
 
-**[v1.10.0のZIPを直接ダウンロード](https://github.com/pen2/cygnus-movies/releases/download/v1.10.0/cygnus-movies-1.10.0-macOS-universal.zip)** · 約3.0MB · macOS 13以降 · Apple silicon / Intel両対応
+**[v1.11.0のZIPを直接ダウンロード](https://github.com/pen2/cygnus-movies/releases/download/v1.11.0/cygnus-movies-1.11.0-macOS-universal.zip)** · 約3.4MB · macOS 13以降 · Apple silicon / Intel両対応
 
 1. ZIPをダウンロードして、ダブルクリックで展開します。
 2. **Cygnus Movies.app** を「アプリケーション」フォルダにドラッグします。
@@ -32,7 +32,7 @@ Cygnus Moviesは、動画や画像をタイムラインに並べ、カット・�
 
 ## 長所
 
-- **小さな配布サイズ**：Intel / Apple silicon両対応でも、配布ZIPは約3.0MB。動画処理にはmacOS標準のAVFoundationを使用し、外部のFFmpegや大きな変換エンジンを同梱しません。
+- **小さな配布サイズ**：Intel / Apple silicon両対応でも、配布ZIPは約3.4MB。動画処理にはmacOS標準のAVFoundationを使用し、外部のFFmpegや大きな変換エンジンを同梱しません。
 - **対応Macでは高速な書き出し**：ハードウェアエンコーダーを優先して利用します。設定でオフにでき、利用できない場合はソフトウェアへ切り替えます。実際に使用した方式は書き出し状況で確認できます。速度は素材・効果・出力設定・Macの機種によって異なります。
 - **ひとつの素材から複数の完成動画へ**：複数タイムラインを使い分け、まとめて書き出せます。タイムライン間の項目の移動・複製、新規タイムラインを作成しての移動・複製、名前の一括変更、書き出し名の連番にも対応します。
 - **素材を複製せずに編集**：プロジェクトには編集内容と元ファイルの参照を保存します。元の動画や画像を変更せず、素材の複製による容量の増加を抑えます。
@@ -92,7 +92,7 @@ Cygnus Moviesは、動画や画像をタイムラインに並べ、カット・�
 
 ## ソースからビルド
 
-この公開リポジトリには、無料版のアプリと、編集・描画・保存に使う共通ライブラリ `CygnusMoviesCore` を収録しています。開発版では「ヘルプ」→「最新版をダウンロードする」でこのページを開けます。
+この公開リポジトリには、無料版のアプリと、編集・描画・保存に使う共通ライブラリ `CygnusMoviesCore` を収録しています。「ヘルプ」→「最新版をダウンロードする」でこのページを開けます。
 
 Xcodeと、そのコマンドラインツールが必要です。Swift Packageとして構成しています。
 
